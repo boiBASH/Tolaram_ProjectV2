@@ -31,10 +31,11 @@ def load_sales_data():
 @st.cache_data
 def load_model_preds():
     preds = pd.read_csv(
-        "sku_predictions.csv",
+        "purchase_predictions_major.csv",
         parse_dates=["last_purchase_date", "pred_next_date"],
     )
     preds = preds.rename(columns={
+        "pred_next_brand":     "Next Brand Purchase", 
         "pred_next_date":     "Next Purchase Date",
         "pred_spend":          "Expected Spend",
         "pred_qty":            "Expected Quantity",
