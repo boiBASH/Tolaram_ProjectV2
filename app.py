@@ -14,7 +14,7 @@ from PIL import Image
 # --- Data Loading & Preprocessing ---
 @st.cache_data
 def load_sales_data():
-    df = pd.read_csv("data_sample_analysis.csv")
+    df = pd.read_csv("data_sample_analysis.csv",, encoding='latin-1')
     df['Redistribution Value'] = (
         df['Redistribution Value']
           .str.replace(',', '', regex=False)
