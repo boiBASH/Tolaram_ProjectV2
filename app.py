@@ -434,15 +434,22 @@ elif section == "📉 Drop Detection":
     mom_change = brand_month_revenue.pct_change(axis=1) * 100
     
     # --- 2. Identify Significant Drops ---
-    # Flag brands with MoM drop greater than the threshold
-    drop_threshold = -30
-    significant_drops = mom_change < drop_threshold
+    # No threshold, show all changes
+    significant_changes = mom_change # Removed the drop_threshold
     
     # --- 3. Create Display DataFrame ---
     # Prepare data for display, including MoM change and drop flag
     display_data = mom_change.round(1).astype(str) + "%"  # Format as string with %
-    display_data[significant_drops] += " 🔻"  # Add a red down arrow for drops
-    display_data[~significant_drops] = "" #make non drops empty
+    
+    def get_arrow(value):
+        if value > 0:
+            return " ⬆️"  # Up arrow
+        elif value < 0:
+            return " 🔻"  # Down arrow
+        else:
+            return ""       # No arrow for zero change
+
+    display_data_with_arrows = mom_change.round(1).apply(lambda x: f"{x:.1f}%{get_arrow(x)}")
     
     # --- 4.  Add Previous Month Revenue for Context
     # Create a DataFrame to hold the previous month's revenue for each brand
@@ -452,15 +459,18 @@ elif section == "📉 Drop Detection":
     prev_month_display = prev_month_revenue.round(0).astype(str)
     
     # Combine the MoM change and previous month revenue for display
-    display_df = display_data.copy()  # Create a copy to avoid modifying the original
+    display_df = display_data_with_arrows.copy()  # Create a copy to avoid modifying the original
     for col in display_df.columns:
-        display_df[col] = display_df[col].astype(str).str.cat(prev_month_display[col].astype(str), sep=' (Prev. Month Revenue: ') + ')'
+        display_df[col] = display_df[col].astype(str) + ' (' + prev_month_display[col].astype(str) + ')'
+    
+    # Rename columns for better display
+    display_df = display_df.rename(columns={col: f"{col}\n(Prev. Month\nRevenue)" for col in display_df.columns})
     
     # --- 5. Streamlit Output ---
     st.write(
         "This table shows the Month-over-Month (MoM) percentage change in revenue for each brand.  "
-        "A red down arrow (🔻) indicates a significant drop (greater than 30%) compared to the previous month.  "
-        "The previous month's revenue is shown in parentheses for context."
+        "Up (⬆️) and down (🔻) arrows indicate the direction of change.  "
+        "Previous month's revenue is shown in parentheses."
     )
     st.dataframe(display_df, use_container_width=True) #make it fill width
 
@@ -472,43 +482,38 @@ elif section == "📉 Drop Detection":
     # -  Correlation with other factors (e.g., promotions, seasonality).
 
     # Example of additional output:
-    num_drops = significant_drops.sum().sum()
-    st.write(f"Total number of significant brand drops: {num_drops}")
+    num_drops = (mom_change < 0).sum().sum() #changed to show all negative changes
+    st.write(f"Total number of brands with negative MoM change: {num_drops}")
     
     if num_drops > 0:
-        st.write("Brands with significant drops (including previous month revenue and MoM % change):")
-        
-        # Melt the significant_drops DataFrame to long format for easier filtering
-        drops_long = significant_drops.reset_index().melt(id_vars='Brand', var_name='Month', value_name='Significant Drop')
+        st.write("Brands with negative MoM change (including previous month revenue and MoM % change):")
         
         # Melt the mom_change DataFrame to long format to get the MoM change values
         mom_long = mom_change.reset_index().melt(id_vars='Brand', var_name='Month', value_name='MoM Change')
         
-        # Merge the two long format DataFrames on 'Brand' and 'Month'
-        drops_mom_merged = pd.merge(drops_long, mom_long, on=['Brand', 'Month'])
+        # Melt previous month revenue to long format
+        prev_month_long = prev_month_revenue.reset_index().melt(id_vars='Brand', var_name='Month', value_name='Previous Month Revenue')
+
+        # Merge
+        brands_with_changes = pd.merge(mom_long, prev_month_long, on=['Brand', 'Month'])
         
-        # Filter for significant drops
-        brands_with_drops = drops_mom_merged[drops_mom_merged['Significant Drop'] == True].copy() # Make a copy here
-        
-        # Add Previous Month Revenue to the DataFrame
-        brands_with_drops = pd.merge(brands_with_drops, prev_month_revenue.reset_index().melt(id_vars='Brand', var_name='Month', value_name='Previous Month Revenue'), on=['Brand', 'Month'])
+        # Filter for negative MoM change
+        brands_with_changes = brands_with_changes[brands_with_changes['MoM Change'] < 0].copy()
         
         # Explicitly set data types to avoid Arrow conversion issues
-        brands_with_drops['Brand'] = brands_with_drops['Brand'].astype(str)
-        brands_with_drops['Month'] = brands_with_drops['Month'].astype(str)
-        brands_with_drops['MoM Change'] = brands_with_drops['MoM Change'].astype(str)
-        brands_with_drops['Previous Month Revenue'] = brands_with_drops['Previous Month Revenue'].astype(float)
+        brands_with_changes['Brand'] = brands_with_changes['Brand'].astype(str)
+        brands_with_changes['Month'] = brands_with_changes['Month'].astype(str)
+        brands_with_changes['MoM Change'] = brands_with_changes['MoM Change'].astype(float) #important
+        brands_with_changes['Previous Month Revenue'] = brands_with_changes['Previous Month Revenue'].astype(float)
         
-        # Format the MoM Change for display
-        brands_with_drops['MoM Change'] = brands_with_drops['MoM Change'].str.round(1) + "%"
+        # Format the MoM Change for display, add arrow
+        brands_with_changes['MoM Change'] = brands_with_changes['MoM Change'].apply(lambda x: f"{x:.1f}%{get_arrow(x)}")
         
         # Display the DataFrame
-        st.dataframe(brands_with_drops[['Brand', 'Month', 'MoM Change', 'Previous Month Revenue']], use_container_width=True)
-        
-        
+        st.dataframe(brands_with_changes[['Brand', 'Month', 'MoM Change', 'Previous Month Revenue']], use_container_width=True)
         
     else:
-        st.write("No significant brand drops detected.")
+        st.write("No brands with negative MoM change.")
     
 
 elif section == "👤 Customer Profiling":
