@@ -254,7 +254,7 @@ if section == "📊 EDA Overview":
         chart = alt.Chart(customer_ltv_with_name.reset_index()).mark_bar().encode(
             x=alt.X('Redistribution Value', title='Total Redistribution Value', axis=alt.Axis(format=',.2s')), # Added formatting
             y=alt.Y('Customer_Info', title='Customer Name and Phone Number', sort='-x'),
-            color=alt.Color('Redistribution Value', scale=alt.Scale(range='viridis')),
+            color=alt.Color('Redistribution Value', scale=alt.Scale(range='heatmap')), # changed the scale
             tooltip=['Customer_Info', 'Redistribution Value']
         ).properties(
             title='Top 10 Customers by Total Spending'
