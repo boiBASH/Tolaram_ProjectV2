@@ -357,11 +357,7 @@ if section == "📊 EDA Overview":
         ltv_top10.columns = ['Customer Phone', 'Total Spend']
         st.markdown("**Top 10 Customers by Lifetime Value (Total Spend)**")
         st.bar_chart(ltv_top10.set_index('Customer Phone')['Total Spend'])
-
-
-"""
-
-# --- EDA Overview ---
+""" # --- EDA Overview ---
 if section == "📊 EDA Overview":
     st.subheader("Exploratory Data Analysis")
     #tabs = st.tabs([
@@ -658,9 +654,7 @@ if section == "📊 EDA Overview":
         st.write("Top Buyers (Latest Month)")
         st.bar_chart(bd.nlargest(10))
         st.write("Bottom Buyers (Latest Month)")
-        st.bar_chart(bd.nsmallest(10))
-
-"""
+        st.bar_chart(bd.nsmallest(10))"""
 elif section == "📉 Drop Detection":
     st.subheader("Brand-Level Month-over-Month (MoM) Revenue Drop Analysis")
     st.markdown(
