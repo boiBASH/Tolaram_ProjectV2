@@ -422,7 +422,8 @@ if section == "📊 EDA Overview":
         final_chart_top_5 = chart_top_5 + text_top_5
         st.altair_chart(final_chart_top_5, use_container_width=True)
 
-# --- Other Sections ---
+
+
 elif section == "📉 Drop Detection":
     st.subheader("Brand-Level Month-over-Month (MoM) Revenue Drop Analysis")
     st.markdown(
@@ -453,10 +454,13 @@ elif section == "📉 Drop Detection":
     for i, col in enumerate(brand_month_revenue.columns):
         prev_month_col = brand_month_revenue.columns[i-1] if i > 0 else None
         mom_val = mom_change[col]
-        prev_revenue = brand_month_revenue[prev_month_col] if prev_month_col is not None else np.nan
+        prev_revenue = brand_month_revenue[prev_month_col] if prev_month_col is not None else pd.Series(index=brand_month_revenue.index)
 
         formatted_values = []
-        for m, p in zip(mom_val, prev_revenue):
+        for brand in brand_month_revenue.index:
+            m = mom_val.get(brand)
+            p = prev_revenue.get(brand)
+
             mom_str = f"{m:.1f}%" if pd.notna(m) else "N/A"
             prev_str = f"{int(p):,}" if pd.notna(p) else "N/A"
             arrow = ""
@@ -478,9 +482,12 @@ elif section == "📉 Drop Detection":
         st.markdown(
             "The following table highlights brands that experienced a decrease in revenue compared to the previous month."
         )
-        # Merge with previous month revenue for context
+        # Melt revenue data for merging
         melted_revenue = brand_month_revenue.melt(ignore_index=False, var_name='Month', value_name='Previous Month Revenue').reset_index()
-        negative_brands_info = pd.merge(negative_mom_changes, melted_revenue, on=['Brand', 'Month'])
+
+        # Merge based on Brand and Month
+        negative_brands_info = pd.merge(negative_mom_changes, melted_revenue, on=['Brand', 'Month'], how='left')
+
         negative_brands_info['MoM Change Formatted'] = negative_brands_info['MoM Change'].apply(lambda x: f"{x:.1f}% <span style='color:red'>🔻</span>" if pd.notna(x) else "N/A")
         negative_brands_info['Previous Month Revenue Formatted'] = negative_brands_info['Previous Month Revenue'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "N/A")
 
