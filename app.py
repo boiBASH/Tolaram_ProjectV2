@@ -461,4 +461,7 @@ elif section == "🔁 Cross-Selling":
     lp = DF.groupby(['Customer_Phone','Brand'])['Month'].max().reset_index()
     drop = lp[lp['Month'] < lp['Month'].max()]
     sw = DF.merge(drop, on='Customer_Phone', suffixes=('','_dropped'))
-    sw = sw[(sw['Month'] >
+    sw = sw[(sw['Month'] > sw['Month_dropped']) & (sw['Brand'] != sw['Brand_dropped'])]
+    patterns = sw.groupby(['Brand_dropped','Brand']).size().reset_index(name='Count')
+    top3 = patterns.sort_values(['Brand_dropped','Count'], ascending=[True,False]).groupby('Brand_dropped').head(3)
+    st.dataframe(top3, use_container_width=True)
