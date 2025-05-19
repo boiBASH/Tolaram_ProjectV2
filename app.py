@@ -135,7 +135,7 @@ if section == "📊 EDA Overview":
     tabs = st.tabs([
         "Top Revenue by Brand", "Top Revenue by SKU", "Top Quantity by Brand", "Top Quantity by SKU", "Top Customers", "Top Buyers by Quantity", "Buyer Types", "Buyer Trends",
         "Brand Trends", "SKU Trends", "Qty vs Revenue", "Avg Order Value", "Lifetime Value",
-        "SKU Share %", "SKU Pairs", "SKU Variety", "Buyer Analysis" #  moved tab
+        "SKU Share %", "SKU Pairs", "SKU Variety", "Buyer Analysis", "Brand Pairs" #  moved tab and added Brand Pairs
         #, "Retention"
     ])
     
@@ -326,7 +326,7 @@ if section == "📊 EDA Overview":
         dist = sku_var.value_counts().sort_index()
         st.bar_chart(dist)
     # 13) Buyer Analysis #this used to be 12, now is 13
-    with tabs[15]:
+    with tabs[16]:
         st.markdown(f"**Buyer Analysis (Top Buyers and Button Buyers)**")
         mm = DF['Month'].max()
         bd = DF[DF['Month']==mm].groupby('Customer_Phone')['Redistribution Value'].sum()
@@ -335,11 +335,11 @@ if section == "📊 EDA Overview":
         st.write("Bottom Buyers (Latest Month)")
         st.bar_chart(bd.nsmallest(10))
 
-    # 14) Retention
-    #with tabs[12]:
-    #    st.markdown(f"**Retention**")
-    #    orders = DF.groupby('Month')['Order_Id'].nunique()
-    #    st.line_chart(orders.rolling(3).mean())
+    # 14) Brand Pairs
+    with tabs[17]:
+        st.markdown(f"**Top 10 Most Frequently Bought Brand Pairs**")
+        df_pairs = calculate_brand_pairs(DF)  # Use the function
+        st.bar_chart(df_pairs.set_index('Brand_Pair_Formatted'))
 
 # --- Other Sections ---
 elif section == "📉 Drop Detection":
@@ -422,3 +422,29 @@ elif section == "🤖 Recommender":
         result.columns = ['SKU_Code', 'Score']
         st.dataframe(result, use_container_width=True)
 
+def calculate_brand_pairs(df):
+    """
+    Calculates the frequency of brand pairs appearing together in orders.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame with sales data, containing columns
+                           'Customer_Phone', 'Delivered_date', and 'Brand'.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the top 20 brand pairs and their
+                      co-occurrence counts, formatted for display.
+    """
+    df['Order_ID'] = df['Customer_Phone'].astype(str) + "_" + df['Delivered_date'].astype(str)
+    order_brands = df.groupby("Order_ID")["Brand"].apply(set)
+
+    pair_counts = Counter()
+    for items in order_brands:
+        if len(items) > 1:
+            for pair in combinations(items, 2):
+                pair_counts[tuple(sorted(pair))] += 1
+
+    pair_df = pd.DataFrame(pair_counts.items(), columns=["Brand_Pair", "Count"]).sort_values(by="Count", ascending=False).head(20)
+
+    # Format brand pairs for display
+    pair_df['Brand_Pair_Formatted'] = pair_df['Brand_Pair'].apply(lambda x: f"{x[0]} & {x[1]}")
+    return pair_df
