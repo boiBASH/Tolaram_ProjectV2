@@ -56,35 +56,117 @@ def load_model_preds():
     return preds
 
 # --- Heuristic Profiling Functions ---
-def analyze_customer_purchases(customer_phone):
-    df = DF[DF['Customer_Phone'] == customer_phone].copy()
-    if df.empty:
-        return {}
-    df.sort_values('Delivered_date', inplace=True)
-    skus = df['SKU_Code'].unique().tolist()
-    last_purchase = df.groupby('SKU_Code')['Delivered_date'].max().dt.strftime('%Y-%m-%d').to_dict()
-    monthly_qty = df.groupby(['SKU_Code','Month'])['Delivered Qty'].sum().groupby('SKU_Code').mean().round(2).to_dict()
-    avg_interval = {}
-    for sku, grp in df.groupby('SKU_Code'):
-        dates = grp['Delivered_date'].drop_duplicates().sort_values()
-        if len(dates) > 1:
-            avg_interval[sku] = round((dates.diff().dt.days.dropna() / 30.44).mean(), 2)
+def analyze_customer_purchases_extended(df, customer_phone):
+    customer_df = df[df['Customer_Phone'] == customer_phone].copy()
+
+    if customer_df.empty:
+        return f"No data found for customer phone: {customer_phone}"
+
+    # Ensure date is sorted
+    customer_df.sort_values('Delivered_date', inplace=True)
+
+    # Add Month column
+    customer_df['Month'] = customer_df['Delivered_date'].dt.to_period('M')
+
+    # Basic customer information
+    customer_name = customer_df['Customer_Name'].iloc[0] if not customer_df.empty else 'N/A'
+
+    # 1. Total Brands Bought
+    brands_bought = customer_df['Brand'].unique().tolist()
+    total_brands_bought = len(brands_bought)
+
+    # 2. SKUs of each Brand Bought
+    brand_skus = customer_df.groupby('Brand')['SKU_Code'].unique().apply(list).to_dict()
+
+    # 3. Purchase Summary by Brand
+    purchase_summary_by_brand = {}
+    for brand in brands_bought:
+        brand_df = customer_df[customer_df['Brand'] == brand]
+        last_purchase_date = brand_df['Delivered_date'].max().strftime('%Y-%m-%d') if not brand_df.empty else 'N/A'
+        total_quantity = brand_df['Delivered Qty'].sum()
+        total_spent = brand_df['Total_Amount_Spent'].sum()
+        purchase_summary_by_brand[brand] = {
+            'Last Purchase Date': last_purchase_date,
+            'Total Quantity Bought': total_quantity,
+            'Total Amount Spent': round(total_spent, 2)
+        }
+
+    # 4. Purchase Summary for Brand SKU
+    purchase_summary_by_brand_sku = {}
+    for brand, skus in brand_skus.items():
+        purchase_summary_by_brand_sku[brand] = {}
+        for sku in skus:
+            sku_df = customer_df[(customer_df['Brand'] == brand) & (customer_df['SKU_Code'] == sku)]
+            if not sku_df.empty:
+                last_purchase = sku_df['Delivered_date'].max().strftime('%Y-%m-%d')
+                monthly_qty_series = sku_df.groupby('Month')['Delivered Qty'].sum()
+                avg_monthly_qty = monthly_qty_series.mean().round(2) if not monthly_qty_series.empty else 0.0
+                monthly_spend_series = sku_df.groupby('Month')['Total_Amount_Spent'].sum()
+                avg_monthly_spend = monthly_spend_series.mean().round(2) if not monthly_spend_series.empty else 0.0
+
+                purchase_summary_by_brand_sku[brand][sku] = {
+                    'Last Purchase Date': last_purchase,
+                    'Avg Monthly Quantity': avg_monthly_qty,
+                    'Avg Monthly Spend': avg_monthly_spend
+                }
+            else:
+                purchase_summary_by_brand_sku[brand][sku] = {
+                    'Last Purchase Date': 'N/A',
+                    'Avg Monthly Quantity': 0.0,
+                    'Avg Monthly Spend': 0.0
+                }
+
+    # 5. Salesman Analysis
+    most_sold_salesman_info = 'N/A'
+    salesman_designation = 'N/A'
+
+    if 'Salesman_Name' in customer_df.columns and 'Order_Id' in customer_df.columns and not customer_df.empty:
+        salesman_unique_order_counts = customer_df.groupby('Salesman_Name')['Order_Id'].nunique()
+
+        if not salesman_unique_order_counts.empty and salesman_unique_order_counts.max() > 0:
+            most_sold_salesman_name = salesman_unique_order_counts.idxmax()
+            most_sold_salesman_count = salesman_unique_order_counts.max()
+            most_sold_salesman_info = f"{most_sold_salesman_name} ({int(most_sold_salesman_count)} orders)"
+
+            if 'Designation' in customer_df.columns and not customer_df[customer_df['Salesman_Name'] == most_sold_salesman_name].empty:
+                salesman_designation = customer_df[customer_df['Salesman_Name'] == most_sold_salesman_name]['Designation'].iloc[0]
+            else:
+                salesman_designation = 'Designation data not available'
+
+    # 6. Customer Branch
+    customer_branch = 'N/A'
+    if 'Branch' in customer_df.columns and not customer_df.empty:
+        unique_branches = customer_df['Branch'].unique()
+        if len(unique_branches) == 1:
+            customer_branch = unique_branches[0]
+        elif len(unique_branches) > 1:
+            customer_branch = ", ".join(unique_branches)
         else:
-            avg_interval[sku] = 'One'
-    monthly_spend = df.groupby(['SKU_Code','Month'])['Total_Amount_Spent'].sum().groupby('SKU_Code').mean().round(2).to_dict()
+            customer_branch = 'N/A (Branch data missing)'
+    else:
+        customer_branch = 'N/A (Branch column missing)'
+
+    # 7. Total Order Count
+    total_order_count = 0
+    if 'Order_Id' in customer_df.columns:
+        total_order_count = customer_df['Order_Id'].nunique()
+    else:
+        total_order_count = len(customer_df)
+
     report = {
         'Customer Phone': customer_phone,
-        'Total Unique SKUs Bought': len(skus),
-        'SKUs Bought': skus,
-        'Purchase Summary by SKU': {}
+        'Customer Name': customer_name,
+        'Customer Branch': customer_branch,
+        'Total Unique Brands Bought': total_brands_bought,
+        'Brands Bought': brands_bought,
+        'Total Order Count': total_order_count,
+        'Top Salesperson': most_sold_salesman_info,
+        'Salesperson Designation': salesman_designation,
+        'Brand Level Summary': purchase_summary_by_brand,
+        'Brand SKU Level Summary': purchase_summary_by_brand_sku,
+        'SKUs Grouped by Brand': brand_skus
     }
-    for sku in skus:
-        report['Purchase Summary by SKU'][sku] = {
-            'Last Purchase Date': last_purchase.get(sku, 'N/A'),
-            'Avg Monthly Quantity': monthly_qty.get(sku, 0),
-            'Avg Purchase Interval (Months)': avg_interval.get(sku, 'N/A'),
-            'Avg Monthly Spend': monthly_spend.get(sku, 0)
-        }
+
     return report
 
 def predict_next_purchases(customer_phone):
@@ -112,10 +194,6 @@ def predict_next_purchases(customer_phone):
     ).dt.date
     return score_df.sort_values('Avg Interval Days').head(3)[['Next Purchase Date','Expected Spend','Expected Quantity']]
 
-# --- Load Data ---
-DF = load_sales_data()
-PRED_DF = load_model_preds()
-
 # --- Utility function ---
 def calculate_brand_pairs(df):
     """
@@ -141,6 +219,10 @@ def calculate_brand_pairs(df):
     pair_df = pd.DataFrame(pair_counts.items(), columns=["Brand_Pair_Tuple", "Count"]).sort_values(by="Count", ascending=False)
     pair_df['Brand_Pair_Formatted'] = pair_df['Brand_Pair_Tuple'].apply(lambda x: f"{x[0]} & {x[1]}")
     return pair_df
+
+# --- Load Data ---
+DF = load_sales_data()
+PRED_DF = load_model_preds()
 
 # --- UI Setup ---
 logo = Image.open("logo.png")
@@ -233,7 +315,6 @@ if section == "📊 EDA Overview":
         st.bar_chart(dist_sku_var)
 
     # --- Brand Deep Dive by SKU ---
-    # --- Brand Deep Dive by SKU ---
     with tabs[2]:
         st.subheader("Brand Deep Dive by SKU")
         top_brands = DF.groupby("Brand")["Redistribution Value"].sum().nlargest(5).index.tolist()
@@ -249,7 +330,6 @@ if section == "📊 EDA Overview":
                 df_pairs['Brand_Pair_Tuple'].apply(lambda x: selected_brand_deep_dive in x)
             ].sort_values(by='Count', ascending=False)
 
-            
             if not filtered_pairs.empty:
                 chart = alt.Chart(filtered_pairs).mark_bar().encode(
                     x=alt.X('Brand_Pair_Formatted', title='Co-Purchased Brand', sort='-y'),
@@ -290,7 +370,6 @@ if section == "📊 EDA Overview":
             st.markdown(f"**Monthly Quantity Trend for Top 5 SKUs in {selected_brand_deep_dive}**")
             st.line_chart(trend_sku_brand)
 
-                
     # --- Customers Overview ---
     with tabs[3]:
         st.subheader("Customers Analysis")
@@ -466,14 +545,37 @@ elif section == "👤 Customer Profiling":
     st.subheader("Customer Purchase Deep-Dive")
     cust = st.selectbox("Select Customer Phone:", sorted(DF['Customer_Phone'].unique()))
     if cust:
-        rep = analyze_customer_purchases(cust)
-        st.markdown(f"**Total Unique SKUs Bought:** {rep['Total Unique SKUs Bought']}")
-        st.markdown(f"**SKUs Bought:** {', '.join(rep['SKUs Bought'])}")
-        sku_df = pd.DataFrame.from_dict(rep['Purchase Summary by SKU'], orient='index')
-        sku_df = sku_df.rename_axis('SKU_Code').reset_index()
-        st.dataframe(sku_df, use_container_width=True)
-        st.subheader("Next-Purchase Predictions (Heuristic)")
-        st.dataframe(predict_next_purchases(cust), use_container_width=True)
+        report = analyze_customer_purchases_extended(DF, cust)
+        if isinstance(report, str):
+            st.write(report)
+        else:
+            st.markdown(f"**Customer Name:** {report['Customer Name']}")
+            st.markdown(f"**Customer Branch:** {report['Customer Branch']}")
+            st.markdown(f"**Total Unique Brands Bought:** {report['Total Unique Brands Bought']}")
+            st.markdown(f"**Brands Bought:** {', '.join(report['Brands Bought'])}")
+            st.markdown(f"**Total Order Count:** {report['Total Order Count']}")
+            st.markdown(f"**Top Salesperson:** {report['Top Salesperson']}")
+            st.markdown(f"**Salesperson Designation:** {report['Salesperson Designation']}")
+
+            st.subheader("Brand Level Purchase Summary")
+            brand_summary_df = pd.DataFrame.from_dict(report['Brand Level Summary'], orient='index')
+            brand_summary_df = brand_summary_df.rename_axis('Brand').reset_index()
+            st.dataframe(brand_summary_df, use_container_width=True)
+
+            st.subheader("Brand SKU Level Purchase Summary")
+            for brand, sku_summary in report['Brand SKU Level Summary'].items():
+                st.markdown(f"**Brand:** {brand}")
+                sku_summary_df = pd.DataFrame.from_dict(sku_summary, orient='index')
+                sku_summary_df = sku_summary_df.rename_axis('SKU Code').reset_index()
+                st.dataframe(sku_summary_df, use_container_width=True)
+
+            st.subheader("SKUs Grouped by Brand")
+            for brand, skus in report['SKUs Grouped by Brand'].items():
+                st.markdown(f"**Brand:** {brand}")
+                st.write(skus)
+
+            st.subheader("Next-Purchase Predictions (Heuristic)")
+            st.dataframe(predict_next_purchases(cust), use_container_width=True)
 
 elif section == "👤 Customer Profilling (Model Predictions)":
     st.subheader("Next-Purchase Model Predictions")
