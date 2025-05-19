@@ -251,8 +251,8 @@ if section == "📊 EDA Overview":
         st.markdown(f"**Monthly Purchase Value Trend for Top Buyers**")
         df_b = DF.copy()
         df_b["MonthTS"] = df_b["Month"].dt.to_timestamp()
-        top10 = df_b.groupby("Customer_Phone")["Redistribution Value"].sum().nlargest(10).index
-        trend = df_b[df_b["Customer_Phone"].isin(top10)]
+        top5 = df_b.groupby("Customer_Phone")["Redistribution Value"].sum().nlargest(5).index
+        trend = df_b[df_b["Customer_Phone"].isin(top5)]
         trend = trend.groupby(["MonthTS","Customer_Phone"])["Redistribution Value"].sum().unstack()
         st.line_chart(trend)
 
