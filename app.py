@@ -183,7 +183,7 @@ if section == "📊 EDA Overview":
         ).properties(
             #title='Top 10 Customers by Total Spending',
             width=600,  # Increased width
-            height=800 # increased height
+            height=750 # increased height
         )
 
         # Add text labels to the bars
