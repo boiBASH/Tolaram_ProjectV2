@@ -428,11 +428,14 @@ elif section == "📉 Drop Detection":
 
     # --- 1. Data Preparation ---
     # Group data by Brand and Month, calculate total revenue
+
+    
     try:
         brand_month_revenue = DF.groupby(['Brand', 'Month'])['Redistribution Value'].sum().unstack(fill_value=0)
     except KeyError as e:
         st.error(f"KeyError in data processing: {e}.  Please ensure the 'Brand', 'Month', and 'Redistribution Value' columns are present in your data.")
-        return
+        st.stop()
+
 
 
     # Calculate Month-over-Month (MoM) percentage change
