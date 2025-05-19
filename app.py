@@ -183,7 +183,7 @@ if section == "📊 EDA Overview":
         if not filtered_pairs.empty:
             st.subheader(f"Brand Pairs for {selected_brand}")
             chart = alt.Chart(filtered_pairs).mark_bar().encode(
-                x=alt.X('Brand_Pair_Formatted', title='Brand Pair'),
+                x=alt.X('Brand_Pair_Formatted', title='Brand Pair', sort='-y'),  # Sort by descending y (Count)
                 y=alt.Y('Count', title='Frequency'),
                 color=alt.Color('Count', legend=alt.Legend(title='Frequency')),
                 tooltip=['Brand_Pair_Formatted', 'Count']
@@ -209,7 +209,7 @@ if section == "📊 EDA Overview":
         st.subheader("Top 5 Most Frequently Bought Brand Pairs Overall")
         top_5_pairs = df_pairs.head(5)
         chart_top_5 = alt.Chart(top_5_pairs).mark_bar().encode(
-            x=alt.X('Brand_Pair_Formatted', title='Brand Pair'),
+            x=alt.X('Brand_Pair_Formatted', title='Brand Pair', sort='-y'), # Sort by descending y (Count)
             y=alt.Y('Count', title='Frequency'),
             color=alt.Color('Count', legend=alt.Legend(title='Frequency')),
             tooltip=['Brand_Pair_Formatted', 'Count']
@@ -309,3 +309,4 @@ elif section == "🤖 Recommender":
         result = top5.reset_index()
         result.columns = ['SKU_Code', 'Score']
         st.dataframe(result, use_container_width=True)
+
