@@ -134,7 +134,7 @@ if section == "📊 EDA Overview":
     st.subheader("Exploratory Data Analysis")
     tabs = st.tabs([
         "Top Revenue by Brand", "Top Revenue by SKU", "Top Quantity by Brand", "Top Quantity by SKU", "Top Customers", "Top Buyers by Quantity", "Buyer Types", "Buyer Trends",
-        "SKU Trends", "Qty vs Revenue", "Avg Order Value", "Lifetime Value",
+        "Brand Trend", "SKU Trends", "Qty vs Revenue", "Avg Order Value", "Lifetime Value",
         "SKU Share %", "SKU Pairs", "SKU Variety", "Buyer Analysis" #  moved tab
         #, "Retention"
     ])
@@ -255,8 +255,19 @@ if section == "📊 EDA Overview":
         trend = df_b[df_b["Customer_Phone"].isin(top5)]
         trend = trend.groupby(["MonthTS","Customer_Phone"])["Redistribution Value"].sum().unstack()
         st.line_chart(trend)
-    # 5) SKU Trends
+
+        # 5) SKU Trends
     with tabs[8]:
+        st.markdown(f"**Monthly Quantity Trend for Top 5 Brand**")
+        df_s = DF.copy()
+        df_s["MonthTS"] = df_s["Month"].dt.to_timestamp()
+        top5 = df_s.groupby("Brand")["Delivered Qty"].sum().nlargest(5).index
+        trend = df_s[df_s["Brand"].isin(top5)]
+        trend = trend.groupby(["MonthTS","Brand"])["Delivered Qty"].sum().unstack()
+        st.line_chart(trend)
+        
+    # 5) SKU Trends
+    with tabs[9]:
         st.markdown(f"**Monthly Quantity Trend for Top 5 SKUs**")
         df_s = DF.copy()
         df_s["MonthTS"] = df_s["Month"].dt.to_timestamp()
@@ -265,7 +276,7 @@ if section == "📊 EDA Overview":
         trend = trend.groupby(["MonthTS","SKU_Code"])["Delivered Qty"].sum().unstack()
         st.line_chart(trend)
     # 6) Qty vs Revenue
-    with tabs[9]:
+    with tabs[10]:
         st.markdown(f"**Monthly Trend: Quantity vs. Revenue**")
         monthly_summary = DF.groupby("Month")[ ["Delivered Qty","Redistribution Value"] ].sum().reset_index()
         monthly_summary["MonthTS"] = monthly_summary["Month"].dt.to_timestamp()
@@ -282,22 +293,22 @@ if section == "📊 EDA Overview":
         dual = alt.layer(qty, rev).resolve_scale(y="independent").properties(height=400)
         st.altair_chart(dual, use_container_width=True)
     # 7) Avg Order Value
-    with tabs[10]:
+    with tabs[11]:
         st.markdown(f"**Top 10 Customers by Average Order Value**")
         data = DF.groupby("Customer_Phone")["Redistribution Value"].mean().nlargest(10)
         st.bar_chart(data)
     # 8) Lifetime Value
-    with tabs[11]:
+    with tabs[12]:
         st.markdown(f"**Top 10 Customers by Lifetime Value (Total Spend)**")
         data = DF.groupby("Customer_Phone")["Redistribution Value"].sum().nlargest(10)
         st.bar_chart(data)
     # 9) SKU Share %
-    with tabs[12]:
+    with tabs[13]:
         st.markdown(f"**Top 10 SKUs by Share of Total Quantity (in %)**")
         share = DF.groupby("SKU_Code")["Delivered Qty"].sum() / DF["Delivered Qty"].sum() * 100
         st.bar_chart(share.nlargest(10))
     # 10) SKU Pairs
-    with tabs[13]:
+    with tabs[14]:
         st.markdown(f"**Top 10 Most Frequently Bought SKU Pairs**")
         cnt = Counter()
         df_p = DF.copy()
@@ -309,7 +320,7 @@ if section == "📊 EDA Overview":
         df_pairs.index = df_pairs.index.map(lambda t: f"{t[0]} & {t[1]}")
         st.bar_chart(df_pairs)
     # 11) SKU Variety
-    with tabs[14]:
+    with tabs[15]:
         st.markdown(f"**Distribution of SKU Variety Per Customer (Number os customer by number of unique SKUs purchased)**")
         sku_var = DF.groupby("Customer_Phone")["SKU_Code"].nunique()
         dist = sku_var.value_counts().sort_index()
