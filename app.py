@@ -459,7 +459,7 @@ elif section == "📉 Drop Detection":
         else:
             return ""       # No arrow for zero change
 
-    display_data_with_arrows = mom_change.round(1).apply(lambda x: f"{x:.1f}%{get_arrow(x)}")
+    display_data_with_arrows = mom_change.round(1).applymap(lambda x: f"{x:.1f}%{get_arrow(x)}")
     
     # --- 4.  Add Previous Month Revenue for Context
     # Create a DataFrame to hold the previous month's revenue for each brand
