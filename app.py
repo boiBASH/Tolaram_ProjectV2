@@ -367,7 +367,33 @@ if section == "📊 EDA Overview":
     with tabs[17]:
         st.markdown(f"**Top 10 Most Frequently Bought Brand Pairs**")
         df_pairs = calculate_brand_pairs(DF)  # Use the function
-        st.bar_chart(df_pairs.set_index('Brand_Pair_Formatted'))
+
+        # Use Altair for a more visually appealing bar chart
+        chart = alt.Chart(df_pairs).mark_bar().encode(
+            x=alt.X('Brand_Pair_Formatted', title='Brand Pair'),
+            y=alt.Y('Count', title='Frequency'),
+            color=alt.Color('Count', legend=alt.Legend(title='Frequency')),
+            tooltip=['Brand_Pair_Formatted', 'Count']  # Add tooltip for interactivity
+        ).properties(
+            width=600,
+            height=400,
+            title='Top 10 Most Frequently Bought Brand Pairs'
+        )
+
+        # Add labels to the bars
+        text = chart.mark_text(
+            align='center',
+            baseline='bottom',
+            dy=-5  # Nudge labels slightly above the bars
+        ).encode(
+            text='Count',
+            color=alt.value('black')  # Set the color of the labels to black
+        )
+
+        # Combine the bars and labels
+        final_chart = chart + text
+
+        st.altair_chart(final_chart, use_container_width=True)
 
 # --- Other Sections ---
 elif section == "📉 Drop Detection":
