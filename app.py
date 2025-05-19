@@ -137,10 +137,9 @@ def calculate_brand_pairs(df):
             for pair in combinations(items, 2):
                 pair_counts[tuple(sorted(pair))] += 1
 
-    pair_df = pd.DataFrame(pair_counts.items(), columns=["Brand_Pair", "Count"]).sort_values(by="Count", ascending=False).head(20)
-
-    # Format brand pairs for display
-    pair_df['Brand_Pair_Formatted'] = pair_df['Brand_Pair'].apply(lambda x: f"{x[0]} & {x[1]}")
+    pair_df = pd.DataFrame(pair_counts.items(), columns=["Brand_Pair", "Count"]).sort_values(by="Count", ascending=False)
+    pair_df['Brand_1'] = pair_df['Brand_Pair'].apply(lambda x: x[0])
+    pair_df['Brand_2'] = pair_df['Brand_Pair'].apply(lambda x: x[1])
     return pair_df
 
 # --- UI Setup ---
@@ -365,34 +364,64 @@ if section == "📊 EDA Overview":
 
     # 14) Brand Pairs
     with tabs[17]:
-        st.markdown(f"**Top 10 Most Frequently Bought Brand Pairs**")
+        st.markdown(f"**Brand Pair Analysis**")
         df_pairs = calculate_brand_pairs(DF)  # Use the function
 
-        # Use Altair for a more visually appealing bar chart
-        chart = alt.Chart(df_pairs).mark_bar().encode(
+        all_brands = sorted(list(set(df_pairs['Brand_1']) | set(df_pairs['Brand_2'])))
+        selected_brand = st.selectbox("Select a Brand to Analyze:", all_brands)
+
+        # Filter pairs containing the selected brand
+        filtered_pairs = df_pairs[
+            (df_pairs['Brand_1'] == selected_brand) | (df_pairs['Brand_2'] == selected_brand)
+        ].sort_values(by='Count', ascending=False)
+
+        if not filtered_pairs.empty:
+            st.subheader(f"Brand Pairs for {selected_brand}")
+            chart = alt.Chart(filtered_pairs).mark_bar().encode(
+                x=alt.X('Brand_Pair_Formatted', title='Brand Pair'),
+                y=alt.Y('Count', title='Frequency'),
+                color=alt.Color('Count', legend=alt.Legend(title='Frequency')),
+                tooltip=['Brand_Pair_Formatted', 'Count']
+            ).properties(
+                width=600,
+                height=400,
+                title=f"Brand Pairs for {selected_brand}"
+            )
+            text = chart.mark_text(
+                align='center',
+                baseline='bottom',
+                dy=-5
+            ).encode(
+                text='Count',
+                color=alt.value('black')
+            )
+            final_chart = chart + text
+            st.altair_chart(final_chart, use_container_width=True)
+        else:
+            st.write(f"No co-purchases found for {selected_brand} with any other brand.")
+
+        # Display Top 5 Brand Pairs Overall
+        st.subheader("Top 5 Most Frequently Bought Brand Pairs Overall")
+        top_pairs = df_pairs.sort_values(by='Count', ascending=False).head(5)
+        chart = alt.Chart(top_pairs).mark_bar().encode(
             x=alt.X('Brand_Pair_Formatted', title='Brand Pair'),
             y=alt.Y('Count', title='Frequency'),
             color=alt.Color('Count', legend=alt.Legend(title='Frequency')),
-            tooltip=['Brand_Pair_Formatted', 'Count']  # Add tooltip for interactivity
+            tooltip=['Brand_Pair_Formatted', 'Count']
         ).properties(
             width=600,
             height=400,
-            title='Top 10 Most Frequently Bought Brand Pairs'
+            title="Top 5 Most Frequently Bought Brand Pairs Overall"
         )
-
-        # Add labels to the bars
         text = chart.mark_text(
             align='center',
             baseline='bottom',
-            dy=-5  # Nudge labels slightly above the bars
+            dy=-5
         ).encode(
             text='Count',
-            color=alt.value('black')  # Set the color of the labels to black
+            color=alt.value('black')
         )
-
-        # Combine the bars and labels
         final_chart = chart + text
-
         st.altair_chart(final_chart, use_container_width=True)
 
 # --- Other Sections ---
@@ -432,7 +461,7 @@ elif section == "🔁 Cross-Selling":
     lp = DF.groupby(['Customer_Phone','Brand'])['Month'].max().reset_index()
     drop = lp[lp['Month'] < lp['Month'].max()]
     sw = DF.merge(drop, on='Customer_Phone', suffixes=('','_dropped'))
-    sw = sw[(sw['Month'] > sw['Month_dropped']) & (sw['Brand'] != sw['Brand_dropped'])]
+    sw = sw[(sw['Month'] > sw['Month_dropped']) & (sw['Brand'] !=sw['Brand_dropped'])]
     patterns = sw.groupby(['Brand_dropped','Brand']).size().reset_index(name='Count')
     top3 = patterns.sort_values(['Brand_dropped','Count'], ascending=[True,False]).groupby('Brand_dropped').head(3)
     st.dataframe(top3, use_container_width=True)
@@ -475,3 +504,4 @@ elif section == "🤖 Recommender":
         result = top5.reset_index()
         result.columns = ['SKU_Code', 'Score']
         st.dataframe(result, use_container_width=True)
+
