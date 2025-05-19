@@ -248,31 +248,31 @@ if section == "📊 EDA Overview":
         st.bar_chart(summary)
     # 4) Buyer Trends
     with tabs[7]:
-        st.markdown(f"**Monthly Purchase Value Trend for Top 5 Buyers**")
+        st.markdown(f"**Monthly Purchase Value Trend for Top Buyers**")
         df_b = DF.copy()
         df_b["MonthTS"] = df_b["Month"].dt.to_timestamp()
-        top5 = df_b.groupby("Customer_Phone")["Redistribution Value"].sum().nlargest(5).index
-        trend = df_b[df_b["Customer_Phone"].isin(top5)]
+        top10 = df_b.groupby("Customer_Phone")["Redistribution Value"].sum().nlargest(10).index
+        trend = df_b[df_b["Customer_Phone"].isin(top10)]
         trend = trend.groupby(["MonthTS","Customer_Phone"])["Redistribution Value"].sum().unstack()
         st.line_chart(trend)
 
         # 5) SKU Trends
     with tabs[8]:
-        st.markdown(f"**Monthly Quantity Trend for Top 5 Brand**")
+        st.markdown(f"**Monthly Quantity Trend for Top Brand**")
         df_s = DF.copy()
         df_s["MonthTS"] = df_s["Month"].dt.to_timestamp()
-        top5 = df_s.groupby("Brand")["Delivered Qty"].sum().nlargest(5).index
-        trend = df_s[df_s["Brand"].isin(top5)]
+        top10 = df_s.groupby("Brand")["Delivered Qty"].sum().nlargest(10).index
+        trend = df_s[df_s["Brand"].isin(top10)]
         trend = trend.groupby(["MonthTS","Brand"])["Delivered Qty"].sum().unstack()
         st.line_chart(trend)
         
     # 5) SKU Trends
     with tabs[9]:
-        st.markdown(f"**Monthly Quantity Trend for Top 5 SKUs**")
+        st.markdown(f"**Monthly Quantity Trend for Top SKUs**")
         df_s = DF.copy()
         df_s["MonthTS"] = df_s["Month"].dt.to_timestamp()
-        top5 = df_s.groupby("SKU_Code")["Delivered Qty"].sum().nlargest(5).index
-        trend = df_s[df_s["SKU_Code"].isin(top5)]
+        top10 = df_s.groupby("SKU_Code")["Delivered Qty"].sum().nlargest(10).index
+        trend = df_s[df_s["SKU_Code"].isin(top10)]
         trend = trend.groupby(["MonthTS","SKU_Code"])["Delivered Qty"].sum().unstack()
         st.line_chart(trend)
     # 6) Qty vs Revenue
