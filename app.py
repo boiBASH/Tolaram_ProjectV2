@@ -17,8 +17,8 @@ def load_sales_data():
     df = pd.read_csv("data_sample_analysis.csv", encoding='latin-1')
     df['Redistribution Value'] = (
         df['Redistribution Value']
-          .str.replace(',', '', regex=False)
-          .astype(float)
+        .str.replace(',', '', regex=False)
+        .astype(float)
     )
     df['Delivered_date'] = pd.to_datetime(
         df['Delivered_date'], errors='coerce', dayfirst=True
@@ -35,10 +35,10 @@ def load_model_preds():
         parse_dates=["last_purchase_date", "pred_next_date"],
     )
     preds = preds.rename(columns={
-        "pred_next_brand":     "Next Brand Purchase", 
+        "pred_next_brand":     "Next Brand Purchase",
         "pred_next_date":     "Next Purchase Date",
-        "pred_spend":          "Expected Spend",
-        "pred_qty":            "Expected Quantity",
+        "pred_spend":         "Expected Spend",
+        "pred_qty":         "Expected Quantity",
         "probability":         "Probability"
     })
     preds["Next Purchase Date"] = preds["Next Purchase Date"].dt.date
@@ -98,7 +98,7 @@ def predict_next_purchases(customer_phone):
             avg_interval_days[sku] = int(dates.diff().dt.days.dropna().mean())
         else:
             avg_interval_days[sku] = np.nan
-    avg_qty   = df.groupby(['SKU_Code','Month'])['Delivered Qty'].sum().groupby('SKU_Code').mean().round(0)
+    avg_qty     = df.groupby(['SKU_Code','Month'])['Delivered Qty'].sum().groupby('SKU_Code').mean().round(0)
     avg_spend = df.groupby(['SKU_Code','Month'])['Total_Amount_Spent'].sum().groupby('SKU_Code').mean().round(0)
     score_df = pd.DataFrame({
         'Last Purchase Date': last_purchase.dt.date,
@@ -135,7 +135,8 @@ if section == "📊 EDA Overview":
     tabs = st.tabs([
         "Top Revenue by Brand", "Top Revenue by SKU", "Top Quantity", "Buyer Types", "Buyer Trends",
         "SKU Trends", "Qty vs Revenue", "Avg Order Value", "Lifetime Value",
-        "SKU Share %", "SKU Pairs", "SKU Variety", "Buyer Analysis"#, "Retention"
+        "SKU Share %", "SKU Pairs", "SKU Variety", "Buyer Analysis", "Top 10 Customers by Total Spending" # Added the new tab here
+        #, "Retention"
     ])
     
     # 1) Top Revenue by SKU
@@ -178,7 +179,7 @@ if section == "📊 EDA Overview":
         trend = trend.groupby(["MonthTS","SKU_Code"])["Delivered Qty"].sum().unstack()
         st.line_chart(trend)
     # 6) Qty vs Revenue
-    with tabs[5]:
+    with tabs[6]:
         st.markdown(f"**Monthly Trend: Quantity vs. Revenue**")
         monthly_summary = DF.groupby("Month")[ ["Delivered Qty","Redistribution Value"] ].sum().reset_index()
         monthly_summary["MonthTS"] = monthly_summary["Month"].dt.to_timestamp()
@@ -236,7 +237,47 @@ if section == "📊 EDA Overview":
         st.bar_chart(bd.nlargest(10))
         st.write("Bottom Buyers (Latest Month)")
         st.bar_chart(bd.nsmallest(10))
-    # 13) Retention
+    # 13) Top 10 Customers by Total Spending
+    with tabs[13]:
+        st.markdown(f"**Top 10 Customers by Total Spending**")
+        # Preprocess the data as in the original code
+        df_chart = DF.copy()
+        df_chart['Customer_Info'] = df_chart['Customer_Name'] + ' (0' + df_chart['Customer_Phone'].astype(str) + ')'
+        customer_ltv_with_name = (
+            df_chart.groupby("Customer_Info")["Redistribution Value"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(10)
+        )
+
+        # Use Altair for the bar chart
+        chart = alt.Chart(customer_ltv_with_name.reset_index()).mark_bar().encode(
+            x=alt.X('Redistribution Value', title='Total Redistribution Value', axis=alt.Axis(format=',.2s')), # Added formatting
+            y=alt.Y('Customer_Info', title='Customer Name and Phone Number', sort='-x'),
+            color=alt.Color('Redistribution Value', scale=alt.Scale(range='viridis')),
+            tooltip=['Customer_Info', 'Redistribution Value']
+        ).properties(
+            title='Top 10 Customers by Total Spending'
+        )
+
+        # Add text labels to the bars
+        text = chart.mark_text(
+            align='left',
+            baseline='middle',
+            dx=5,  # Nudge labels to the right
+            dy=0  # Center labels vertically
+        ).encode(
+            text=alt.Text('Redistribution Value', format=',.2s'), # Added formatting
+            color=alt.value('black')  # Set the color of the labels to black
+        )
+
+        # Combine the bars and labels
+        final_chart = chart + text
+
+        # Display the chart in Streamlit
+        st.altair_chart(final_chart, use_container_width=True)
+
+    # 14) Retention
     #with tabs[12]:
     #    st.markdown(f"**Retention**")
     #    orders = DF.groupby('Month')['Order_Id'].nunique()
