@@ -160,7 +160,7 @@ if section == "📊 EDA Overview":
     st.subheader("Exploratory Data Analysis")
     tabs = st.tabs([
         "Top Revenue by Brand", "Top Revenue by SKU", "Top Quantity by Brand", "Top Quantity by SKU", "Top Customers", "Top Buyers by Quantity", "Buyer Types", "Buyer Trends",
-        "Brand Trends", "SKU Trends", "Qty vs Revenue", "Avg Order Value", "Lifetime Value", "Brands Share %"
+        "Brand Trends", "SKU Trends", "Qty vs Revenue", "Avg Order Value", "Lifetime Value", "Brands Share %",
         "SKU Share %", "SKU Pairs", "SKU Variety", "Buyer Analysis", "Brand Pairs" #  moved tab and added Brand Pairs
         # , "Retention"
     ])
