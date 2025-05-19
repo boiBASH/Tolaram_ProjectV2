@@ -14,7 +14,7 @@ from PIL import Image
 # --- Data Loading & Preprocessing ---
 @st.cache_data
 def load_sales_data():
-    df = pd.read_csv("data_sample_analysis.csv", encoding='latin-1')
+    df = pd.read_csv("data_sample_analysis.csv", encoding='latin1')
     df['Redistribution Value'] = (
         df['Redistribution Value']
         .str.replace(',', '', regex=False)
@@ -435,7 +435,7 @@ elif section == "📉 Drop Detection":
     
     # --- 2. Identify Significant Drops ---
     # Flag brands with MoM drop greater than the threshold
-    drop_threshold = -10
+    drop_threshold = -30
     significant_drops = mom_change < drop_threshold
     
     # --- 3. Create Display DataFrame ---
@@ -454,7 +454,7 @@ elif section == "📉 Drop Detection":
     # Combine the MoM change and previous month revenue for display
     display_df = display_data.copy()  # Create a copy to avoid modifying the original
     for col in display_df.columns:
-        display_df[col] = display_df[col].str.cat(prev_month_display[col], sep=' (Prev. Month Revenue: ') + ')'
+        display_df[col] = display_df[col].astype(str).str.cat(prev_month_display[col].astype(str), sep=' (Prev. Month Revenue: ') + ')'
     
     # --- 5. Streamlit Output ---
     st.write(
@@ -488,13 +488,19 @@ elif section == "📉 Drop Detection":
         drops_mom_merged = pd.merge(drops_long, mom_long, on=['Brand', 'Month'])
         
         # Filter for significant drops
-        brands_with_drops = drops_mom_merged[drops_mom_merged['Significant Drop'] == True]
+        brands_with_drops = drops_mom_merged[drops_mom_merged['Significant Drop'] == True].copy() # Make a copy here
         
         # Add Previous Month Revenue to the DataFrame
         brands_with_drops = pd.merge(brands_with_drops, prev_month_revenue.reset_index().melt(id_vars='Brand', var_name='Month', value_name='Previous Month Revenue'), on=['Brand', 'Month'])
         
+        # Explicitly set data types to avoid Arrow conversion issues
+        brands_with_drops['Brand'] = brands_with_drops['Brand'].astype(str)
+        brands_with_drops['Month'] = brands_with_drops['Month'].astype(str)
+        brands_with_drops['MoM Change'] = brands_with_drops['MoM Change'].astype(str)
+        brands_with_drops['Previous Month Revenue'] = brands_with_drops['Previous Month Revenue'].astype(float)
+        
         # Format the MoM Change for display
-        brands_with_drops['MoM Change'] = brands_with_drops['MoM Change'].round(1).astype(str) + "%"
+        brands_with_drops['MoM Change'] = brands_with_drops['MoM Change'].str.round(1) + "%"
         
         # Display the DataFrame
         st.dataframe(brands_with_drops[['Brand', 'Month', 'MoM Change', 'Previous Month Revenue']], use_container_width=True)
