@@ -249,22 +249,7 @@ if section == "📊 EDA Overview":
                 df_pairs['Brand_Pair_Tuple'].apply(lambda x: selected_brand_deep_dive in x)
             ].sort_values(by='Count', ascending=False)
 
-            st.markdown(f"**Top 10 SKUs by Revenue in {selected_brand_deep_dive}**")
-            top_skus_rev = brand_df.groupby("SKU_Code")["Redistribution Value"].sum().nlargest(10)
-            st.bar_chart(top_skus_rev)
-
-            st.markdown(f"**Top 10 SKUs by Quantity Sold in {selected_brand_deep_dive}**")
-            top_skus_qty = brand_df.groupby("SKU_Code")["Delivered Qty"].sum().nlargest(10)
-            st.bar_chart(top_skus_qty)
-
-            df_sku_trend_brand = brand_df.copy()
-            df_sku_trend_brand["MonthTS"] = df_sku_trend_brand["Month"].dt.to_timestamp()
-            top5_skus_in_brand = df_sku_trend_brand.groupby("SKU_Code")["Delivered Qty"].sum().nlargest(5).index
-            trend_sku_brand = df_sku_trend_brand[df_sku_trend_brand["SKU_Code"].isin(top5_skus_in_brand)]
-            trend_sku_brand = trend_sku_brand.groupby(["MonthTS", "SKU_Code"])["Delivered Qty"].sum().unstack()
-            st.markdown(f"**Monthly Quantity Trend for Top 5 SKUs in {selected_brand_deep_dive}**")
-            st.line_chart(trend_sku_brand)
-
+            
             if not filtered_pairs.empty:
                 chart = alt.Chart(filtered_pairs).mark_bar().encode(
                     x=alt.X('Brand_Pair_Formatted', title='Co-Purchased Brand', sort='-y'),
@@ -288,6 +273,23 @@ if section == "📊 EDA Overview":
                 st.altair_chart(final_chart, use_container_width=True)
             else:
                 st.write(f"No co-purchases found for {selected_brand_deep_dive} with any other brand.")
+
+            st.markdown(f"**Top 10 SKUs by Revenue in {selected_brand_deep_dive}**")
+            top_skus_rev = brand_df.groupby("SKU_Code")["Redistribution Value"].sum().nlargest(10)
+            st.bar_chart(top_skus_rev)
+
+            st.markdown(f"**Top 10 SKUs by Quantity Sold in {selected_brand_deep_dive}**")
+            top_skus_qty = brand_df.groupby("SKU_Code")["Delivered Qty"].sum().nlargest(10)
+            st.bar_chart(top_skus_qty)
+
+            df_sku_trend_brand = brand_df.copy()
+            df_sku_trend_brand["MonthTS"] = df_sku_trend_brand["Month"].dt.to_timestamp()
+            top5_skus_in_brand = df_sku_trend_brand.groupby("SKU_Code")["Delivered Qty"].sum().nlargest(5).index
+            trend_sku_brand = df_sku_trend_brand[df_sku_trend_brand["SKU_Code"].isin(top5_skus_in_brand)]
+            trend_sku_brand = trend_sku_brand.groupby(["MonthTS", "SKU_Code"])["Delivered Qty"].sum().unstack()
+            st.markdown(f"**Monthly Quantity Trend for Top 5 SKUs in {selected_brand_deep_dive}**")
+            st.line_chart(trend_sku_brand)
+
                 
     # --- Customers Overview ---
     with tabs[3]:
