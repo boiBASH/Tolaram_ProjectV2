@@ -140,6 +140,7 @@ def calculate_brand_pairs(df):
     pair_df = pd.DataFrame(pair_counts.items(), columns=["Brand_Pair", "Count"]).sort_values(by="Count", ascending=False)
     pair_df['Brand_1'] = pair_df['Brand_Pair'].apply(lambda x: x[0])
     pair_df['Brand_2'] = pair_df['Brand_Pair'].apply(lambda x: x[1])
+    pair_df['Brand_Pair_Formatted'] = pair_df['Brand_Pair'].apply(lambda x: f"{x[0]} & {x[1]}") # Added formatted column
     return pair_df
 
 # --- UI Setup ---
@@ -368,7 +369,7 @@ if section == "📊 EDA Overview":
         df_pairs = calculate_brand_pairs(DF)  # Use the function
 
         all_brands = sorted(list(set(df_pairs['Brand_1']) | set(df_pairs['Brand_2'])))
-        selected_brand = st.selectbox("Select a Brand to Analyze:", all_brands)
+        selected_brand = st.selectbox("Select a Brand to show its pair analysis:", all_brands)
 
         # Filter pairs containing the selected brand
         filtered_pairs = df_pairs[
@@ -423,6 +424,7 @@ if section == "📊 EDA Overview":
         )
         final_chart = chart + text
         st.altair_chart(final_chart, use_container_width=True)
+
 
 # --- Other Sections ---
 elif section == "📉 Drop Detection":
