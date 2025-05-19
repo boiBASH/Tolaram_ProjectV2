@@ -258,7 +258,7 @@ if section == "📊 EDA Overview":
                     tooltip=['Brand_Pair_Formatted', 'Count']
                 ).properties(
                     width=600,
-                    height=400,
+                    height=500,
                     title=f"Brands Purchased Alongside {selected_brand_deep_dive}"
                 )
                 text = chart.mark_text(
