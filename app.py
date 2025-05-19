@@ -133,7 +133,7 @@ st.title("📊 Sales Intelligence Dashboard")
 if section == "📊 EDA Overview":
     st.subheader("Exploratory Data Analysis")
     tabs = st.tabs([
-        "Top Revenue by Brand", "Top Revenue by SKU", "Top Quantity by Brand", "Top Quantity by SKU", "Top 10 Customers", "Buyer Types", "Buyer Trends",
+        "Top Revenue by Brand", "Top Revenue by SKU", "Top Quantity by Brand", "Top Quantity by SKU", "Top Customers", "Top Buyers by Quantity", "Buyer Types", "Buyer Trends",
         "SKU Trends", "Qty vs Revenue", "Avg Order Value", "Lifetime Value",
         "SKU Share %", "SKU Pairs", "SKU Variety", "Buyer Analysis" #  moved tab
         #, "Retention"
@@ -202,14 +202,52 @@ if section == "📊 EDA Overview":
 
         # Display the chart in Streamlit
         st.altair_chart(final_chart, use_container_width=True)
-    # 3) Buyer Types
+
+    # New Tab: Top Buyers by Quantity
     with tabs[5]:
+        st.markdown(f"**Top 10 Buyers by Quantity Purchased**")
+        # Preprocess the data as in the original code
+        df_chart_qty = DF.copy()
+        df_chart_qty['Customer_Info'] = df_chart_qty['Customer_Name'] + ' (0' + df_chart_qty['Customer_Phone'].astype(str) + ')'
+        top_buyers_qty_with_name = (
+            df_chart_qty.groupby("Customer_Info")["Delivered Qty"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(10)
+        )
+
+        # Use Altair for the bar chart
+        chart_qty = alt.Chart(top_buyers_qty_with_name.reset_index()).mark_bar().encode(
+            x=alt.X('Delivered Qty', title='Total Quantity', axis=alt.Axis(format=',.2s')),
+            y=alt.Y('Customer_Info', sort='-x', title='Customer Name and Phone Number'),
+            color=alt.Color('Delivered Qty'),
+            tooltip=['Customer_Info', 'Delivered Qty']
+        ).properties(
+            width=600,
+            height=750
+        )
+        
+        # Add text labels to the bars
+        text_qty = chart_qty.mark_text(
+            align='left',
+            baseline='middle',
+            dx=5,
+        ).encode(
+            text=alt.Text('Delivered Qty', format=',.2s'),
+            color=alt.value('black')
+        )
+        
+        final_chart_qty = chart_qty + text_qty
+        st.altair_chart(final_chart_qty, use_container_width=True)
+
+    # 3) Buyer Types
+    with tabs[6]:
         st.markdown(f"**Buyer Type (Repeat vs. One-Time Buyers)**")
         counts = DF.groupby("Customer_Phone")["Delivered_date"].nunique()
         summary = (counts == 1).map({True: "One-time", False: "Repeat"}).value_counts()
         st.bar_chart(summary)
     # 4) Buyer Trends
-    with tabs[6]:
+    with tabs[7]:
         st.markdown(f"**Monthly Purchase Value Trend for Top 5 Buyers**")
         df_b = DF.copy()
         df_b["MonthTS"] = df_b["Month"].dt.to_timestamp()
@@ -218,7 +256,7 @@ if section == "📊 EDA Overview":
         trend = trend.groupby(["MonthTS","Customer_Phone"])["Redistribution Value"].sum().unstack()
         st.line_chart(trend)
     # 5) SKU Trends
-    with tabs[7]:
+    with tabs[8]:
         st.markdown(f"**Monthly Quantity Trend for Top 5 SKUs**")
         df_s = DF.copy()
         df_s["MonthTS"] = df_s["Month"].dt.to_timestamp()
@@ -227,7 +265,7 @@ if section == "📊 EDA Overview":
         trend = trend.groupby(["MonthTS","SKU_Code"])["Delivered Qty"].sum().unstack()
         st.line_chart(trend)
     # 6) Qty vs Revenue
-    with tabs[8]:
+    with tabs[9]:
         st.markdown(f"**Monthly Trend: Quantity vs. Revenue**")
         monthly_summary = DF.groupby("Month")[ ["Delivered Qty","Redistribution Value"] ].sum().reset_index()
         monthly_summary["MonthTS"] = monthly_summary["Month"].dt.to_timestamp()
@@ -244,22 +282,22 @@ if section == "📊 EDA Overview":
         dual = alt.layer(qty, rev).resolve_scale(y="independent").properties(height=400)
         st.altair_chart(dual, use_container_width=True)
     # 7) Avg Order Value
-    with tabs[9]:
+    with tabs[10]:
         st.markdown(f"**Top 10 Customers by Average Order Value**")
         data = DF.groupby("Customer_Phone")["Redistribution Value"].mean().nlargest(10)
         st.bar_chart(data)
     # 8) Lifetime Value
-    with tabs[10]:
+    with tabs[11]:
         st.markdown(f"**Top 10 Customers by Lifetime Value (Total Spend)**")
         data = DF.groupby("Customer_Phone")["Redistribution Value"].sum().nlargest(10)
         st.bar_chart(data)
     # 9) SKU Share %
-    with tabs[11]:
+    with tabs[12]:
         st.markdown(f"**Top 10 SKUs by Share of Total Quantity (in %)**")
         share = DF.groupby("SKU_Code")["Delivered Qty"].sum() / DF["Delivered Qty"].sum() * 100
         st.bar_chart(share.nlargest(10))
     # 10) SKU Pairs
-    with tabs[12]:
+    with tabs[13]:
         st.markdown(f"**Top 10 Most Frequently Bought SKU Pairs**")
         cnt = Counter()
         df_p = DF.copy()
@@ -271,13 +309,13 @@ if section == "📊 EDA Overview":
         df_pairs.index = df_pairs.index.map(lambda t: f"{t[0]} & {t[1]}")
         st.bar_chart(df_pairs)
     # 11) SKU Variety
-    with tabs[13]:
+    with tabs[14]:
         st.markdown(f"**Distribution of SKU Variety Per Customer (Number os customer by number of unique SKUs purchased)**")
         sku_var = DF.groupby("Customer_Phone")["SKU_Code"].nunique()
         dist = sku_var.value_counts().sort_index()
         st.bar_chart(dist)
     # 13) Buyer Analysis #this used to be 12, now is 13
-    with tabs[14]:
+    with tabs[15]:
         st.markdown(f"**Buyer Analysis (Top Buyers and Button Buyers)**")
         mm = DF['Month'].max()
         bd = DF[DF['Month']==mm].groupby('Customer_Phone')['Redistribution Value'].sum()
