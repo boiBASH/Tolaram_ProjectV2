@@ -435,7 +435,7 @@ elif section == "📉 Drop Detection":
     
     # --- 2. Identify Significant Drops ---
     # Flag brands with MoM drop greater than the threshold
-    drop_threshold = -30
+    drop_threshold = -10
     significant_drops = mom_change < drop_threshold
     
     # --- 3. Create Display DataFrame ---
@@ -452,8 +452,9 @@ elif section == "📉 Drop Detection":
     prev_month_display = prev_month_revenue.round(0).astype(str)
     
     # Combine the MoM change and previous month revenue for display
-    for col in display_data.columns:
-        display_data[col] = display_data[col].str.cat(prev_month_display[col], sep=' (Prev. Month Revenue: ') + ')'
+    display_df = display_data.copy()  # Create a copy to avoid modifying the original
+    for col in display_df.columns:
+        display_df[col] = display_df[col].str.cat(prev_month_display[col], sep=' (Prev. Month Revenue: ') + ')'
     
     # --- 5. Streamlit Output ---
     st.write(
@@ -461,7 +462,7 @@ elif section == "📉 Drop Detection":
         "A red down arrow (🔻) indicates a significant drop (greater than 30%) compared to the previous month.  "
         "The previous month's revenue is shown in parentheses for context."
     )
-    st.dataframe(display_data, use_container_width=True) #make it fill width
+    st.dataframe(display_df, use_container_width=True) #make it fill width
 
     # --- 6.  Additional Analysis and Insights (Optional) ---
     # You could add more detailed analysis here, such as:
