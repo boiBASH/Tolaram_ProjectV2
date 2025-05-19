@@ -283,4 +283,29 @@ elif section == "🤖 Recommender":
         index='Customer_Phone', columns='SKU_Code',
         values='Redistribution Value', aggfunc='sum'
     ).fillna(0)
-  
+    # item content/features
+    pf = pd.get_dummies(
+        DF[['SKU_Code','Brand']].drop_duplicates(), columns=['Brand']
+    ).set_index('SKU_Code')
+    # compute similarities
+    user_sim = cosine_similarity(uim)
+    item_sim = cosine_similarity(pf)
+    user_sim_df = pd.DataFrame(user_sim, index=uim.index, columns=uim.index)
+    item_sim_df = pd.DataFrame(item_sim, index=pf.index, columns=pf.index)
+
+    sel = st.selectbox("Select Customer", uim.index)
+    if st.button("Recommend"):
+        # collaborative score: weighted sum of user similarities
+        collab_scores = uim.T.dot(user_sim_df[sel])
+        # remove SKUs already purchased by sel
+        purchased = uim.loc[sel][uim.loc[sel] > 0].index
+        collab_scores = collab_scores.drop(index=purchased, errors='ignore')
+        # content score: sum of item similarities to purchased SKUs
+        content_scores = item_sim_df.loc[purchased].sum(axis=0)
+        content_scores = content_scores.drop(index=purchased, errors='ignore')
+        # combine with equal weight
+        combined = 0.5 * collab_scores + 0.5 * content_scores
+        top5 = combined.nlargest(5)
+        result = top5.reset_index()
+        result.columns = ['SKU_Code', 'Score']
+        st.dataframe(result, use_container_width=True)
