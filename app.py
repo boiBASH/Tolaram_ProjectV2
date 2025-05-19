@@ -8,6 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from datetime import datetime
 from PIL import Image
 
+
 # Must be first Streamlit command
 st.set_page_config(page_title="Sales Intelligence Dashboard", layout="wide")
 
