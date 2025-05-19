@@ -135,7 +135,7 @@ if section == "📊 EDA Overview":
     tabs = st.tabs([
         "Top Revenue by Brand", "Top Revenue by SKU", "Top Quantity", "Buyer Types", "Buyer Trends",
         "SKU Trends", "Qty vs Revenue", "Avg Order Value", "Lifetime Value",
-        "SKU Share %", "SKU Pairs", "SKU Variety", "Buyer Analysis", "Top 10 Customers by Total Spending" # Added the new tab here
+        "SKU Share %", "SKU Pairs", "SKU Variety",  "Top 10 Customers by Total Spending", "Buyer Analysis" #  moved tab
         #, "Retention"
     ])
     
@@ -228,17 +228,8 @@ if section == "📊 EDA Overview":
         sku_var = DF.groupby("Customer_Phone")["SKU_Code"].nunique()
         dist = sku_var.value_counts().sort_index()
         st.bar_chart(dist)
-    # 12) Buyer Analysis
+    # 12) Top 10 Customers by Total Spending
     with tabs[12]:
-        st.markdown(f"**Buyer Analysis (Top Buyers and Button Buyers)**")
-        mm = DF['Month'].max()
-        bd = DF[DF['Month']==mm].groupby('Customer_Phone')['Redistribution Value'].sum()
-        st.write("Top Buyers (Latest Month)")
-        st.bar_chart(bd.nlargest(10))
-        st.write("Bottom Buyers (Latest Month)")
-        st.bar_chart(bd.nsmallest(10))
-    # 13) Top 10 Customers by Total Spending
-    with tabs[13]:
         st.markdown(f"**Top 10 Customers by Total Spending**")
         # Preprocess the data as in the original code
         df_chart = DF.copy()
@@ -257,7 +248,9 @@ if section == "📊 EDA Overview":
             color=alt.Color('Redistribution Value', scale=alt.Scale(range='heatmap')), # changed the scale
             tooltip=['Customer_Info', 'Redistribution Value']
         ).properties(
-            title='Top 10 Customers by Total Spending'
+            title='Top 10 Customers by Total Spending',
+            width=600,  # Increased width
+            height=400 # increased height
         )
 
         # Add text labels to the bars
@@ -276,6 +269,16 @@ if section == "📊 EDA Overview":
 
         # Display the chart in Streamlit
         st.altair_chart(final_chart, use_container_width=True)
+
+    # 13) Buyer Analysis #this used to be 12, now is 13
+    with tabs[13]:
+        st.markdown(f"**Buyer Analysis (Top Buyers and Button Buyers)**")
+        mm = DF['Month'].max()
+        bd = DF[DF['Month']==mm].groupby('Customer_Phone')['Redistribution Value'].sum()
+        st.write("Top Buyers (Latest Month)")
+        st.bar_chart(bd.nlargest(10))
+        st.write("Bottom Buyers (Latest Month)")
+        st.bar_chart(bd.nsmallest(10))
 
     # 14) Retention
     #with tabs[12]:
@@ -363,3 +366,4 @@ elif section == "🤖 Recommender":
         result = top5.reset_index()
         result.columns = ['SKU_Code', 'Score']
         st.dataframe(result, use_container_width=True)
+
