@@ -115,6 +115,34 @@ def predict_next_purchases(customer_phone):
 DF = load_sales_data()
 PRED_DF = load_model_preds()
 
+# --- Utility function ---
+def calculate_brand_pairs(df):
+    """
+    Calculates the frequency of brand pairs appearing together in orders.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame with sales data, containing columns
+                           'Customer_Phone', 'Delivered_date', and 'Brand'.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the top 20 brand pairs and their
+                      co-occurrence counts, formatted for display.
+    """
+    df['Order_ID'] = df['Customer_Phone'].astype(str) + "_" + df['Delivered_date'].astype(str)
+    order_brands = df.groupby("Order_ID")["Brand"].apply(set)
+
+    pair_counts = Counter()
+    for items in order_brands:
+        if len(items) > 1:
+            for pair in combinations(items, 2):
+                pair_counts[tuple(sorted(pair))] += 1
+
+    pair_df = pd.DataFrame(pair_counts.items(), columns=["Brand_Pair", "Count"]).sort_values(by="Count", ascending=False).head(20)
+
+    # Format brand pairs for display
+    pair_df['Brand_Pair_Formatted'] = pair_df['Brand_Pair'].apply(lambda x: f"{x[0]} & {x[1]}")
+    return pair_df
+
 # --- UI Setup ---
 logo = Image.open("logo.png")
 st.sidebar.image(logo, width=80)
@@ -421,30 +449,3 @@ elif section == "🤖 Recommender":
         result = top5.reset_index()
         result.columns = ['SKU_Code', 'Score']
         st.dataframe(result, use_container_width=True)
-
-def calculate_brand_pairs(df):
-    """
-    Calculates the frequency of brand pairs appearing together in orders.
-
-    Args:
-        df (pd.DataFrame): The input DataFrame with sales data, containing columns
-                           'Customer_Phone', 'Delivered_date', and 'Brand'.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing the top 20 brand pairs and their
-                      co-occurrence counts, formatted for display.
-    """
-    df['Order_ID'] = df['Customer_Phone'].astype(str) + "_" + df['Delivered_date'].astype(str)
-    order_brands = df.groupby("Order_ID")["Brand"].apply(set)
-
-    pair_counts = Counter()
-    for items in order_brands:
-        if len(items) > 1:
-            for pair in combinations(items, 2):
-                pair_counts[tuple(sorted(pair))] += 1
-
-    pair_df = pd.DataFrame(pair_counts.items(), columns=["Brand_Pair", "Count"]).sort_values(by="Count", ascending=False).head(20)
-
-    # Format brand pairs for display
-    pair_df['Brand_Pair_Formatted'] = pair_df['Brand_Pair'].apply(lambda x: f"{x[0]} & {x[1]}")
-    return pair_df
