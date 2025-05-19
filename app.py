@@ -421,12 +421,22 @@ if section == "📊 EDA Overview":
         share = DF.groupby("SKU_Code")["Delivered Qty"].sum() / DF["Delivered Qty"].sum() * 100
         st.bar_chart(share.nlargest(10))
 
-    # 11) SKU Variety
+    # 17) Brand Variety
     with tabs[17]:
-        st.markdown(f"**Distribution of Brand Variety Per Customer (Number of customer by number of unique Brand purchased)**")
-        sku_var = DF.groupby("Customer_Phone")["Brand"].nunique()
-        dist = sku_var.value_counts().sort_index()
-        st.bar_chart(dist)
+        st.markdown(f"**Distribution of Brand Variety Per Customer (Number of customers by number of unique Brands purchased)**")
+        brand_var = DF.groupby("Customer_Phone")["Brand"].nunique()
+        dist = brand_var.value_counts().sort_index().reset_index()
+        dist.columns = ['Unique Brands Purchased', 'Number of Customers']
+
+        chart = alt.Chart(dist).mark_bar().encode(
+            x=alt.X('Unique Brands Purchased:O', title='Number of Unique Brands Purchased'),
+            y=alt.Y('Number of Customers:Q', title='Number of Customers'),
+            tooltip=['Unique Brands Purchased', 'Number of Customers']
+        ).properties(
+            width=600,
+            height=400
+        )
+        st.altair_chart(chart, use_container_width=True)
         
     # 11) SKU Variety
     with tabs[18]:
