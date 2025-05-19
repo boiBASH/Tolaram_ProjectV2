@@ -233,6 +233,7 @@ if section == "📊 EDA Overview":
         st.bar_chart(dist_sku_var)
 
     # --- Brand Deep Dive by SKU ---
+    # --- Brand Deep Dive by SKU ---
     with tabs[2]:
         st.subheader("Brand Deep Dive by SKU")
         top_brands = DF.groupby("Brand")["Redistribution Value"].sum().nlargest(5).index.tolist()
@@ -256,6 +257,38 @@ if section == "📊 EDA Overview":
             st.markdown(f"**Monthly Quantity Trend for Top 5 SKUs in {selected_brand_deep_dive}**")
             st.line_chart(trend_sku_brand)
 
+            st.subheader(f"Brand Co-Purchases with {selected_brand_deep_dive}")
+            df_pairs = calculate_brand_pairs(DF)
+
+            # Filter pairs containing the selected brand
+            filtered_pairs = df_pairs[
+                df_pairs['Brand_Pair_Tuple'].apply(lambda x: selected_brand_deep_dive in x)
+            ].sort_values(by='Count', ascending=False)
+
+            if not filtered_pairs.empty:
+                chart = alt.Chart(filtered_pairs).mark_bar().encode(
+                    x=alt.X('Brand_Pair_Formatted', title='Co-Purchased Brand', sort='-y'),
+                    y=alt.Y('Count', title='Frequency'),
+                    color=alt.Color('Count', legend=alt.Legend(title='Frequency')),
+                    tooltip=['Brand_Pair_Formatted', 'Count']
+                ).properties(
+                    width=600,
+                    height=400,
+                    title=f"Brands Purchased Alongside {selected_brand_deep_dive}"
+                )
+                text = chart.mark_text(
+                    align='center',
+                    baseline='bottom',
+                    dy=-5
+                ).encode(
+                    text='Count',
+                    color=alt.value('black')
+                )
+                final_chart = chart + text
+                st.altair_chart(final_chart, use_container_width=True)
+            else:
+                st.write(f"No co-purchases found for {selected_brand_deep_dive} with any other brand.")
+                
     # --- Customers Overview ---
     with tabs[3]:
         st.subheader("Customers Analysis")
