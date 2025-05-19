@@ -241,6 +241,14 @@ if section == "📊 EDA Overview":
         if selected_brand_deep_dive:
             brand_df = DF[DF['Brand'] == selected_brand_deep_dive]
 
+            st.subheader(f"Brand Co-Purchases with {selected_brand_deep_dive}")
+            df_pairs = calculate_brand_pairs(DF)
+
+            # Filter pairs containing the selected brand
+            filtered_pairs = df_pairs[
+                df_pairs['Brand_Pair_Tuple'].apply(lambda x: selected_brand_deep_dive in x)
+            ].sort_values(by='Count', ascending=False)
+
             st.markdown(f"**Top 10 SKUs by Revenue in {selected_brand_deep_dive}**")
             top_skus_rev = brand_df.groupby("SKU_Code")["Redistribution Value"].sum().nlargest(10)
             st.bar_chart(top_skus_rev)
@@ -256,14 +264,6 @@ if section == "📊 EDA Overview":
             trend_sku_brand = trend_sku_brand.groupby(["MonthTS", "SKU_Code"])["Delivered Qty"].sum().unstack()
             st.markdown(f"**Monthly Quantity Trend for Top 5 SKUs in {selected_brand_deep_dive}**")
             st.line_chart(trend_sku_brand)
-
-            st.subheader(f"Brand Co-Purchases with {selected_brand_deep_dive}")
-            df_pairs = calculate_brand_pairs(DF)
-
-            # Filter pairs containing the selected brand
-            filtered_pairs = df_pairs[
-                df_pairs['Brand_Pair_Tuple'].apply(lambda x: selected_brand_deep_dive in x)
-            ].sort_values(by='Count', ascending=False)
 
             if not filtered_pairs.empty:
                 chart = alt.Chart(filtered_pairs).mark_bar().encode(
