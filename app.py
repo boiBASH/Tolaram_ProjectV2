@@ -428,7 +428,11 @@ elif section == "📉 Drop Detection":
 
     # --- 1. Data Preparation ---
     # Group data by Brand and Month, calculate total revenue
-    brand_month_revenue = DF.groupby(['Brand', 'Month'])['Redistribution Value'].sum().unstack(fill_value=0)
+    try:
+        brand_month_revenue = DF.groupby(['Brand', 'Month'])['Redistribution Value'].sum().unstack(fill_value=0)
+    except KeyError as e:
+        st.error(f"KeyError in data processing: {e}.  Please ensure the 'Brand', 'Month', and 'Redistribution Value' columns are present in your data.")
+        return
 
     # Calculate Month-over-Month (MoM) percentage change
     mom_change = brand_month_revenue.pct_change(axis=1) * 100
@@ -442,7 +446,9 @@ elif section == "📉 Drop Detection":
     display_data = mom_change.round(1).astype(str) + "%"  # Format as string with %
     
     def get_arrow(value):
-        if value > 0:
+        if pd.isna(value):  # Check for NaN
+            return ""
+        elif value > 0:
             return " ⬆️"  # Up arrow
         elif value < 0:
             return " 🔻"  # Down arrow
@@ -461,7 +467,7 @@ elif section == "📉 Drop Detection":
     # Combine the MoM change and previous month revenue for display
     display_df = display_data_with_arrows.copy()  # Create a copy to avoid modifying the original
     for col in display_df.columns:
-        display_df[col] = display_df[col].astype(str) + ' (' + prev_month_display[col].astype(str) + ')'
+        display_df[col] = display_df[col].astype(str) + '(' + prev_month_display[col].astype(str) + ')'
     
     # Rename columns for better display
     display_df = display_df.rename(columns={col: f"{col}\n(Prev. Month\nRevenue)" for col in display_df.columns})
