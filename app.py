@@ -14,7 +14,7 @@ from PIL import Image
 # --- Data Loading & Preprocessing ---
 @st.cache_data
 def load_sales_data():
-    df = pd.read_csv("data_sample_analysis.csv", encoding='latin-1')
+    df = pd.read_csv("data_sample_analysis.csv", encoding='latin1')
     df['Redistribution Value'] = (
         df['Redistribution Value']
         .str.replace(',', '', regex=False)
@@ -137,9 +137,8 @@ def calculate_brand_pairs(df):
             for pair in combinations(items, 2):
                 pair_counts[tuple(sorted(pair))] += 1
 
-    pair_df = pd.DataFrame(pair_counts.items(), columns=["Brand_Pair", "Count"]).sort_values(by="Count", ascending=False)
-    pair_df['Brand_1'] = pair_df['Brand_Pair'].apply(lambda x: x[0])
-    pair_df['Brand_2'] = pair_df['Brand_Pair'].apply(lambda x: x[1])
+    pair_df = pd.DataFrame(pair_counts.items(), columns=["Brand_Pair_Tuple", "Count"]).sort_values(by="Count", ascending=False)
+    pair_df['Brand_Pair_Formatted'] = pair_df['Brand_Pair_Tuple'].apply(lambda x: f"{x[0]} & {x[1]}")
     return pair_df
 
 # --- UI Setup ---
@@ -361,7 +360,6 @@ if section == "📊 EDA Overview":
         st.bar_chart(bd.nlargest(10))
         st.write("Bottom Buyers (Latest Month)")
         st.bar_chart(bd.nsmallest(10))
-
     # 14) Brand Pairs
     with tabs[17]:
         st.markdown(f"**Brand Pair Analysis**")
@@ -378,7 +376,7 @@ if section == "📊 EDA Overview":
         if not filtered_pairs.empty:
             st.subheader(f"Brand Pairs for {selected_brand}")
             chart = alt.Chart(filtered_pairs).mark_bar().encode(
-                x=alt.X('Brand_Pair_Formatted', title='Brand Pair'),
+                x=alt.X('Brand_Pair_Formatted', title='Brand Pair', sort='-y'),  # Sort by descending y (Count)
                 y=alt.Y('Count', title='Frequency'),
                 color=alt.Color('Count', legend=alt.Legend(title='Frequency')),
                 tooltip=['Brand_Pair_Formatted', 'Count']
@@ -404,7 +402,7 @@ if section == "📊 EDA Overview":
         st.subheader("Top 5 Most Frequently Bought Brand Pairs Overall")
         top_5_pairs = df_pairs.head(5)
         chart_top_5 = alt.Chart(top_5_pairs).mark_bar().encode(
-            x=alt.X('Brand_Pair_Formatted', title='Brand Pair'),
+            x=alt.X('Brand_Pair_Formatted', title='Brand Pair', sort='-y'), # Sort by descending y (Count)
             y=alt.Y('Count', title='Frequency'),
             color=alt.Color('Count', legend=alt.Legend(title='Frequency')),
             tooltip=['Brand_Pair_Formatted', 'Count']
@@ -426,14 +424,103 @@ if section == "📊 EDA Overview":
 
 # --- Other Sections ---
 elif section == "📉 Drop Detection":
-    st.subheader("Brand-Level MoM Drop (>30%)")
-    bm = DF.groupby(['Brand','Month'])['Redistribution Value'].sum().unstack(fill_value=0)
-    mom = bm.pct_change(axis=1) * 100
-    flags = mom < -30
-    disp = mom.round(1).astype(str)
-    disp[flags] += "% 🔻"
-    disp[~flags] = ""
-    st.dataframe(disp, use_container_width=True) # Added use_container_width
+    st.subheader("Brand-Level MoM Drop Analysis")
+
+    # --- 1. Data Preparation ---
+    # Group data by Brand and Month, calculate total revenue
+    try:
+        brand_month_revenue = DF.groupby(['Brand', 'Month'])['Redistribution Value'].sum().unstack(fill_value=0)
+    except KeyError as e:
+        st.error(f"KeyError in data processing: {e}.  Please ensure the 'Brand', 'Month', and 'Redistribution Value' columns are present in your data.")
+        return
+
+    # Calculate Month-over-Month (MoM) percentage change
+    mom_change = brand_month_revenue.pct_change(axis=1) * 100
+    
+    # --- 2. Identify Significant Drops ---
+    # No threshold, show all changes
+    significant_changes = mom_change # Removed the drop_threshold
+    
+    # --- 3. Create Display DataFrame ---
+    # Prepare data for display, including MoM change and drop flag
+    display_data = mom_change.round(1).astype(str) + "%"  # Format as string with %
+    
+    def get_arrow(value):
+        if pd.isna(value):  # Check for NaN
+            return ""
+        elif value > 0:
+            return " ⬆️"  # Up arrow
+        elif value < 0:
+            return " 🔻"  # Down arrow
+        else:
+            return ""       # No arrow for zero change
+
+    display_data_with_arrows = mom_change.round(1).apply(lambda x: f"{x:.1f}%{get_arrow(x)}")
+    
+    # --- 4.  Add Previous Month Revenue for Context
+    # Create a DataFrame to hold the previous month's revenue for each brand
+    prev_month_revenue = brand_month_revenue.shift(axis=1).fillna(0)  # Shift by one month, fill NaNs with 0
+    
+    # Format the previous month's revenue for display
+    prev_month_display = prev_month_revenue.round(0).astype(str)
+    
+    # Combine the MoM change and previous month revenue for display
+    display_df = display_data_with_arrows.copy()  # Create a copy to avoid modifying the original
+    for col in display_df.columns:
+        display_df[col] = display_df[col].astype(str) + '(' + prev_month_display[col].astype(str) + ')'
+    
+    # Rename columns for better display
+    display_df = display_df.rename(columns={col: f"{col}\n(Prev. Month\nRevenue)" for col in display_df.columns})
+    
+    # --- 5. Streamlit Output ---
+    st.write(
+        "This table shows the Month-over-Month (MoM) percentage change in revenue for each brand.  "
+        "Up (⬆️) and down (🔻) arrows indicate the direction of change.  "
+        "Previous month's revenue is shown in parentheses."
+    )
+    st.dataframe(display_df, use_container_width=True) #make it fill width
+
+    # --- 6.  Additional Analysis and Insights (Optional) ---
+    # You could add more detailed analysis here, such as:
+    # -  Number of brands with drops in the selected period.
+    # -  Average drop percentage.
+    # -  Brands with consecutive drops.
+    # -  Correlation with other factors (e.g., promotions, seasonality).
+
+    # Example of additional output:
+    num_drops = (mom_change < 0).sum().sum() #changed to show all negative changes
+    st.write(f"Total number of brands with negative MoM change: {num_drops}")
+    
+    if num_drops > 0:
+        st.write("Brands with negative MoM change (including previous month revenue and MoM % change):")
+        
+        # Melt the mom_change DataFrame to long format to get the MoM change values
+        mom_long = mom_change.reset_index().melt(id_vars='Brand', var_name='Month', value_name='MoM Change')
+        
+        # Melt previous month revenue to long format
+        prev_month_long = prev_month_revenue.reset_index().melt(id_vars='Brand', var_name='Month', value_name='Previous Month Revenue')
+
+        # Merge
+        brands_with_changes = pd.merge(mom_long, prev_month_long, on=['Brand', 'Month'])
+        
+        # Filter for negative MoM change
+        brands_with_changes = brands_with_changes[brands_with_changes['MoM Change'] < 0].copy()
+        
+        # Explicitly set data types to avoid Arrow conversion issues
+        brands_with_changes['Brand'] = brands_with_changes['Brand'].astype(str)
+        brands_with_changes['Month'] = brands_with_changes['Month'].astype(str)
+        brands_with_changes['MoM Change'] = brands_with_changes['MoM Change'].astype(float) #important
+        brands_with_changes['Previous Month Revenue'] = brands_with_changes['Previous Month Revenue'].astype(float)
+        
+        # Format the MoM Change for display, add arrow
+        brands_with_changes['MoM Change'] = brands_with_changes['MoM Change'].apply(lambda x: f"{x:.1f}%{get_arrow(x)}")
+        
+        # Display the DataFrame
+        st.dataframe(brands_with_changes[['Brand', 'Month', 'MoM Change', 'Previous Month Revenue']], use_container_width=True)
+        
+    else:
+        st.write("No brands with negative MoM change.")
+    
 
 elif section == "👤 Customer Profiling":
     st.subheader("Customer Purchase Deep-Dive")
@@ -465,3 +552,42 @@ elif section == "🔁 Cross-Selling":
     patterns = sw.groupby(['Brand_dropped','Brand']).size().reset_index(name='Count')
     top3 = patterns.sort_values(['Brand_dropped','Count'], ascending=[True,False]).groupby('Brand_dropped').head(3)
     st.dataframe(top3, use_container_width=True)
+
+elif section == "🔗 Brand Correlation":
+    st.subheader("Brand Correlation Matrix")
+    mat = DF.groupby(['Customer_Phone','Brand'])['Order_Id'].count().unstack(fill_value=0)
+    st.dataframe(mat.corr().round(2), use_container_width=True)
+
+elif section == "🤖 Recommender":
+    st.subheader("Hybrid SKU Recommendations")
+    # user-item interaction matrix
+    uim = DF.pivot_table(
+        index='Customer_Phone', columns='SKU_Code',
+        values='Redistribution Value', aggfunc='sum'
+    ).fillna(0)
+    # item content/features
+    pf = pd.get_dummies(
+        DF[['SKU_Code','Brand']].drop_duplicates(), columns=['Brand']
+    ).set_index('SKU_Code')
+    # compute similarities
+    user_sim = cosine_similarity(uim)
+    item_sim = cosine_similarity(pf)
+    user_sim_df = pd.DataFrame(user_sim, index=uim.index, columns=uim.index)
+    item_sim_df = pd.DataFrame(item_sim, index=pf.index, columns=pf.index)
+
+    sel = st.selectbox("Select Customer", uim.index)
+    if st.button("Recommend"):
+        # collaborative score: weighted sum of user similarities
+        collab_scores = uim.T.dot(user_sim_df[sel])
+        # remove SKUs already purchased by sel
+        purchased = uim.loc[sel][uim.loc[sel] > 0].index
+        collab_scores = collab_scores.drop(index=purchased, errors='ignore')
+        # content score: sum of item similarities to purchased SKUs
+        content_scores = item_sim_df.loc[purchased].sum(axis=0)
+        content_scores = content_scores.drop(index=purchased, errors='ignore')
+        # combine with equal weight
+        combined = 0.5 * collab_scores + 0.5 * content_scores
+        top5 = combined.nlargest(5)
+        result = top5.reset_index()
+        result.columns = ['SKU_Code', 'Score']
+        st.dataframe(result, use_container_width=True)
