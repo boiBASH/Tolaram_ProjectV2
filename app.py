@@ -434,6 +434,7 @@ elif section == "📉 Drop Detection":
         st.error(f"KeyError in data processing: {e}.  Please ensure the 'Brand', 'Month', and 'Redistribution Value' columns are present in your data.")
         return
 
+
     # Calculate Month-over-Month (MoM) percentage change
     mom_change = brand_month_revenue.pct_change(axis=1) * 100
     
@@ -542,7 +543,7 @@ elif section == "👤 Customer Profilling (Model Predictions)":
         p = PRED_DF[PRED_DF['Customer_Phone'] == cust].drop(columns=['Customer_Phone']).set_index('SKU_Code')
         p['Probability'] = p['Probability'].map(lambda x: f"{x:.1f}%")
         st.dataframe(p, use_container_width=True)
-
+    
 elif section == "🔁 Cross-Selling":
     st.subheader("Brand Switching Patterns (Top 3)")
     lp = DF.groupby(['Customer_Phone','Brand'])['Month'].max().reset_index()
@@ -552,7 +553,7 @@ elif section == "🔁 Cross-Selling":
     patterns = sw.groupby(['Brand_dropped','Brand']).size().reset_index(name='Count')
     top3 = patterns.sort_values(['Brand_dropped','Count'], ascending=[True,False]).groupby('Brand_dropped').head(3)
     st.dataframe(top3, use_container_width=True)
-
+    
 elif section == "🔗 Brand Correlation":
     st.subheader("Brand Correlation Matrix")
     mat = DF.groupby(['Customer_Phone','Brand'])['Order_Id'].count().unstack(fill_value=0)
