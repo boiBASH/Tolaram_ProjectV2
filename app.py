@@ -661,17 +661,15 @@ if section == "📊 EDA Overview":
         st.bar_chart(bd.nsmallest(10))
 
 """
-
-
 elif section == "📉 Drop Detection":
     st.subheader("Brand-Level Month-over-Month (MoM) Revenue Drop Analysis")
     st.markdown(
         "This section analyzes the month-over-month percentage change in revenue for each brand to identify significant drops."
     )
     st.markdown(
-        "**NB:** "
-        "- Values in the table represent the MoM percentage change in revenue. "
-        "- Upward trend is indicated by ⬆️, and downward trend by 🔻. "
+        "**NB:**"
+        "- Values in the table represent the MoM percentage change in revenue. /n"
+        "- Upward trend is indicated by ⬆️, and downward trend by 🔻. \n"
         "- Previous month's revenue is shown in parentheses to provide context."
         , unsafe_allow_html=True
     )
