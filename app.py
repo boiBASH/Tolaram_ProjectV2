@@ -432,7 +432,7 @@ elif section == "📉 Drop Detection":
     st.markdown(
         "**NB:** "
         "- Values in the table represent the MoM percentage change in revenue. "
-        "- Upward trend is indicated by <span style='color:green'>⬆️</span>, and downward trend by <span style='color:red'>🔻</span>. "
+        "- Upward trend is indicated by ⬆️, and downward trend by 🔻. "
         "- Previous month's revenue is shown in parentheses to provide context."
         , unsafe_allow_html=True
     )
@@ -461,14 +461,14 @@ elif section == "📉 Drop Detection":
             m = mom_val.get(brand)
             p = prev_revenue.get(brand)
 
-            mom_str = f"{m:.1f}%" if pd.notna(m) else "N/A"
-            prev_str = f"{int(p):,}" if pd.notna(p) else "N/A"
+            mom_str = f"{m:.1f}%" if pd.notna(m) else "Not Applicable"
+            prev_str = f"{int(p):,}" if pd.notna(p) else "Not Applicable"
             arrow = ""
             if pd.notna(m):
                 if m > 0:
-                    arrow = " <span style='color:green'>⬆️</span>"
+                    arrow = "⬆️"
                 elif m < 0:
-                    arrow = " <span style='color:red'>🔻</span>"
+                    arrow = "🔻"
             formatted_values.append(f"{mom_str}{arrow} ({prev_str})")
 
         display_df[f"{col}\n(Prev. Month\nRevenue)"] = formatted_values
@@ -488,8 +488,8 @@ elif section == "📉 Drop Detection":
         # Merge based on Brand and Month
         negative_brands_info = pd.merge(negative_mom_changes, melted_revenue, on=['Brand', 'Month'], how='left')
 
-        negative_brands_info['MoM Change Formatted'] = negative_brands_info['MoM Change'].apply(lambda x: f"{x:.1f}% <span style='color:red'>🔻</span>" if pd.notna(x) else "N/A")
-        negative_brands_info['Previous Month Revenue Formatted'] = negative_brands_info['Previous Month Revenue'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "N/A")
+        negative_brands_info['MoM Change Formatted'] = negative_brands_info['MoM Change'].apply(lambda x: f"{x:.1f}% <span style='color:red'>🔻</span>" if pd.notna(x) else "Not Applicable")
+        negative_brands_info['Previous Month Revenue Formatted'] = negative_brands_info['Previous Month Revenue'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "Not Applicable")
 
         display_negative = negative_brands_info[['Brand', 'Month', 'MoM Change Formatted', 'Previous Month Revenue Formatted']]
         display_negative.columns = ['Brand', 'Month', 'MoM Change', 'Previous Month Revenue']
