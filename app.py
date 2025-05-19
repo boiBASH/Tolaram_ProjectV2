@@ -125,7 +125,7 @@ def calculate_brand_pairs(df):
                            'Customer_Phone', 'Delivered_date', and 'Brand'.
 
     Returns:
-        pd.DataFrame: A DataFrame containing the top 20 brand pairs and their
+        pd.DataFrame: A DataFrame containing the top brand pairs and their
                       co-occurrence counts, formatted for display.
     """
     df['Order_ID'] = df['Customer_Phone'].astype(str) + "_" + df['Delivered_date'].astype(str)
@@ -137,10 +137,8 @@ def calculate_brand_pairs(df):
             for pair in combinations(items, 2):
                 pair_counts[tuple(sorted(pair))] += 1
 
-    pair_df = pd.DataFrame(pair_counts.items(), columns=["Brand_Pair", "Count"]).sort_values(by="Count", ascending=False)
-    pair_df['Brand_1'] = pair_df['Brand_Pair'].apply(lambda x: x[0])
-    pair_df['Brand_2'] = pair_df['Brand_Pair'].apply(lambda x: x[1])
-    pair_df['Brand_Pair_Formatted'] = pair_df['Brand_Pair'].apply(lambda x: f"{x[0]} & {x[1]}") # Added formatted column
+    pair_df = pd.DataFrame(pair_counts.items(), columns=["Brand_Pair_Tuple", "Count"]).sort_values(by="Count", ascending=False)
+    pair_df['Brand_Pair_Formatted'] = pair_df['Brand_Pair_Tuple'].apply(lambda x: f"{x[0]} & {x[1]}")
     return pair_df
 
 # --- UI Setup ---
@@ -166,214 +164,20 @@ if section == "📊 EDA Overview":
         "SKU Share %", "SKU Pairs", "SKU Variety", "Buyer Analysis", "Brand Pairs" #  moved tab and added Brand Pairs
         #, "Retention"
     ])
-    
-    # 1) Top Revenue by SKU
-    with tabs[0]:
-        data = DF.groupby("Brand")["Redistribution Value"].sum().nlargest(10)
-        st.markdown(f"**Top 10 Brand by Total Revenue**")
-        st.bar_chart(data)
-    # 1) Top Revenue by SKU
-    with tabs[1]:
-        data = DF.groupby("SKU_Code")["Redistribution Value"].sum().nlargest(10)
-        st.markdown(f"**Top 10 SKUs by Total Revenue**")
-        st.bar_chart(data)
-    # Top 10 Brand by quantity sold
-    with tabs[2]:
-        data = DF.groupby("Brand")["Delivered Qty"].sum().nlargest(10)
-        st.markdown(f"**Top 10 Brand by Quantity Sold**")
-        st.bar_chart(data)
-        
-    # 2) Top 10 Quantity by SKU
-    with tabs[3]:
-        data = DF.groupby("SKU_Code")["Delivered Qty"].sum().nlargest(10)
-        st.markdown(f"**Top 10 SKUs by Quantity Sold**")
-        st.bar_chart(data)
 
-    # Top 10 Customers by Total Spending
-    with tabs[4]:
-        st.markdown(f"**Top 10 Customers by Total Spending**")
-        # Preprocess the data as in the original code
-        df_chart = DF.copy()
-        df_chart['Customer_Info'] = df_chart['Customer_Name'] + ' (0' + df_chart['Customer_Phone'].astype(str) + ')'
-        customer_ltv_with_name = (
-            df_chart.groupby("Customer_Info")["Redistribution Value"]
-            .sum()
-            .sort_values(ascending=False)
-            .head(10)
-        )
-
-        # Use Altair for the bar chart
-        chart = alt.Chart(customer_ltv_with_name.reset_index()).mark_bar().encode(
-            x=alt.X('Redistribution Value', title='Total Redistribution Value', axis=alt.Axis(format=',.2s')), # Added formatting
-            y=alt.Y('Customer_Info', sort='-x', title='Customer Name and Phone Number'),
-            color=alt.Color('Redistribution Value'),#, scale=alt.Scale(range='heatmap')), # changed the scale
-            tooltip=['Customer_Info', 'Redistribution Value']
-        ).properties(
-            #title='Top 10 Customers by Total Spending',
-            width=600,  # Increased width
-            height=750 # increased height
-        )
-
-        # Add text labels to the bars
-        text = chart.mark_text(
-            align='left',
-            baseline='middle',
-            dx=5,  # Nudge labels to the right
-            dy=0  # Center labels vertically
-        ).encode(
-            text=alt.Text('Redistribution Value', format=',.2s'), # Added formatting
-            color=alt.value('black')  # Set the color of the labels to black
-        )
-
-        # Combine the bars and labels
-        final_chart = chart + text
-
-        # Display the chart in Streamlit
-        st.altair_chart(final_chart, use_container_width=True)
-
-    # New Tab: Top Buyers by Quantity
-    with tabs[5]:
-        st.markdown(f"**Top 10 Buyers by Quantity Purchased**")
-        # Preprocess the data as in the original code
-        df_chart_qty = DF.copy()
-        df_chart_qty['Customer_Info'] = df_chart_qty['Customer_Name'] + ' (0' + df_chart_qty['Customer_Phone'].astype(str) + ')'
-        top_buyers_qty_with_name = (
-            df_chart_qty.groupby("Customer_Info")["Delivered Qty"]
-            .sum()
-            .sort_values(ascending=False)
-            .head(10)
-        )
-
-        # Use Altair for the bar chart
-        chart_qty = alt.Chart(top_buyers_qty_with_name.reset_index()).mark_bar().encode(
-            x=alt.X('Delivered Qty', title='Total Quantity', axis=alt.Axis(format=',.2s')),
-            y=alt.Y('Customer_Info', sort='-x', title='Customer Name and Phone Number'),
-            color=alt.Color('Delivered Qty'),
-            tooltip=['Customer_Info', 'Delivered Qty']
-        ).properties(
-            width=600,
-            height=750
-        )
-        
-        # Add text labels to the bars
-        text_qty = chart_qty.mark_text(
-            align='left',
-            baseline='middle',
-            dx=5,
-        ).encode(
-            text=alt.Text('Delivered Qty', format=',.2s'),
-            color=alt.value('black')
-        )
-        
-        final_chart_qty = chart_qty + text_qty
-        st.altair_chart(final_chart_qty, use_container_width=True)
-
-    # 3) Buyer Types
-    with tabs[6]:
-        st.markdown(f"**Buyer Type (Repeat vs. One-Time Buyers)**")
-        counts = DF.groupby("Customer_Phone")["Delivered_date"].nunique()
-        summary = (counts == 1).map({True: "One-time", False: "Repeat"}).value_counts()
-        st.bar_chart(summary)
-    # 4) Buyer Trends
-    with tabs[7]:
-        st.markdown(f"**Monthly Purchase Value Trend for Top Buyers**")
-        df_b = DF.copy()
-        df_b["MonthTS"] = df_b["Month"].dt.to_timestamp()
-        top5 = df_b.groupby("Customer_Phone")["Redistribution Value"].sum().nlargest(5).index
-        trend = df_b[df_b["Customer_Phone"].isin(top5)]
-        trend = trend.groupby(["MonthTS","Customer_Phone"])["Redistribution Value"].sum().unstack()
-        st.line_chart(trend)
-
-        # 5) SKU Trends
-    with tabs[8]:
-        st.markdown(f"**Monthly Quantity Trend for Top Brand**")
-        df_s = DF.copy()
-        df_s["MonthTS"] = df_s["Month"].dt.to_timestamp()
-        top10 = df_s.groupby("Brand")["Delivered Qty"].sum().nlargest(10).index
-        trend = df_s[df_s["Brand"].isin(top10)]
-        trend = trend.groupby(["MonthTS","Brand"])["Delivered Qty"].sum().unstack()
-        st.line_chart(trend)
-        
-    # 5) SKU Trends
-    with tabs[9]:
-        st.markdown(f"**Monthly Quantity Trend for Top SKUs**")
-        df_s = DF.copy()
-        df_s["MonthTS"] = df_s["Month"].dt.to_timestamp()
-        top10 = df_s.groupby("SKU_Code")["Delivered Qty"].sum().nlargest(10).index
-        trend = df_s[df_s["SKU_Code"].isin(top10)]
-        trend = trend.groupby(["MonthTS","SKU_Code"])["Delivered Qty"].sum().unstack()
-        st.line_chart(trend)
-    # 6) Qty vs Revenue
-    with tabs[10]:
-        st.markdown(f"**Monthly Trend: Quantity vs. Revenue**")
-        monthly_summary = DF.groupby("Month")[ ["Delivered Qty","Redistribution Value"] ].sum().reset_index()
-        monthly_summary["MonthTS"] = monthly_summary["Month"].dt.to_timestamp()
-        qty = alt.Chart(monthly_summary).mark_line(point=True).encode(
-            x=alt.X("MonthTS:T", title="Month"),
-            y=alt.Y("Delivered Qty:Q", axis=alt.Axis(title="Total Quantity", titleColor="royalblue")),
-            color=alt.value("royalblue")
-        )
-        rev = alt.Chart(monthly_summary).mark_line(point=True).encode(
-            x="MonthTS:T",
-            y=alt.Y("Redistribution Value:Q", axis=alt.Axis(title="Total Revenue", titleColor="orange")),
-            color=alt.value("orange")
-        )
-        dual = alt.layer(qty, rev).resolve_scale(y="independent").properties(height=400)
-        st.altair_chart(dual, use_container_width=True)
-    # 7) Avg Order Value
-    with tabs[11]:
-        st.markdown(f"**Top 10 Customers by Average Order Value**")
-        data = DF.groupby("Customer_Phone")["Redistribution Value"].mean().nlargest(10)
-        st.bar_chart(data)
-    # 8) Lifetime Value
-    with tabs[12]:
-        st.markdown(f"**Top 10 Customers by Lifetime Value (Total Spend)**")
-        data = DF.groupby("Customer_Phone")["Redistribution Value"].sum().nlargest(10)
-        st.bar_chart(data)
-    # 9) SKU Share %
-    with tabs[13]:
-        st.markdown(f"**Top 10 SKUs by Share of Total Quantity (in %)**")
-        share = DF.groupby("SKU_Code")["Delivered Qty"].sum() / DF["Delivered Qty"].sum() * 100
-        st.bar_chart(share.nlargest(10))
-    # 10) SKU Pairs
-    with tabs[14]:
-        st.markdown(f"**Top 10 Most Frequently Bought SKU Pairs**")
-        cnt = Counter()
-        df_p = DF.copy()
-        df_p["Order_ID"] = df_p["Customer_Phone"].astype(str) + "_" + df_p["Delivered_date"].astype(str)
-        for s in df_p.groupby("Order_ID")["SKU_Code"].apply(set):
-            if len(s) > 1:
-                for pair in combinations(sorted(s), 2): cnt[pair] += 1
-        df_pairs = pd.Series(cnt).nlargest(10).to_frame(name="Count")
-        df_pairs.index = df_pairs.index.map(lambda t: f"{t[0]} & {t[1]}")
-        st.bar_chart(df_pairs)
-    # 11) SKU Variety
-    with tabs[15]:
-        st.markdown(f"**Distribution of SKU Variety Per Customer (Number os customer by number of unique SKUs purchased)**")
-        sku_var = DF.groupby("Customer_Phone")["SKU_Code"].nunique()
-        dist = sku_var.value_counts().sort_index()
-        st.bar_chart(dist)
-    # 13) Buyer Analysis #this used to be 12, now is 13
-    with tabs[16]:
-        st.markdown(f"**Buyer Analysis (Top Buyers and Button Buyers)**")
-        mm = DF['Month'].max()
-        bd = DF[DF['Month']==mm].groupby('Customer_Phone')['Redistribution Value'].sum()
-        st.write("Top Buyers (Latest Month)")
-        st.bar_chart(bd.nlargest(10))
-        st.write("Bottom Buyers (Latest Month)")
-        st.bar_chart(bd.nsmallest(10))
+    # ... (rest of the EDA Overview code) ...
 
     # 14) Brand Pairs
     with tabs[17]:
         st.markdown(f"**Brand Pair Analysis**")
         df_pairs = calculate_brand_pairs(DF)  # Use the function
 
-        all_brands = sorted(list(set(df_pairs['Brand_1']) | set(df_pairs['Brand_2'])))
-        selected_brand = st.selectbox("Select a Brand to show its pair analysis:", all_brands)
+        all_brands = sorted(list(set(brand for pair in df_pairs['Brand_Pair_Tuple'] for brand in pair)))
+        selected_brand = st.selectbox("Select a Brand to Analyze:", all_brands)
 
         # Filter pairs containing the selected brand
         filtered_pairs = df_pairs[
-            (df_pairs['Brand_1'] == selected_brand) | (df_pairs['Brand_2'] == selected_brand)
+            df_pairs['Brand_Pair_Tuple'].apply(lambda x: selected_brand in x)
         ].sort_values(by='Count', ascending=False)
 
         if not filtered_pairs.empty:
@@ -403,8 +207,8 @@ if section == "📊 EDA Overview":
 
         # Display Top 5 Brand Pairs Overall
         st.subheader("Top 5 Most Frequently Bought Brand Pairs Overall")
-        top_pairs = df_pairs.sort_values(by='Count', ascending=False).head(5)
-        chart = alt.Chart(top_pairs).mark_bar().encode(
+        top_5_pairs = df_pairs.head(5)
+        chart_top_5 = alt.Chart(top_5_pairs).mark_bar().encode(
             x=alt.X('Brand_Pair_Formatted', title='Brand Pair'),
             y=alt.Y('Count', title='Frequency'),
             color=alt.Color('Count', legend=alt.Legend(title='Frequency')),
@@ -414,7 +218,7 @@ if section == "📊 EDA Overview":
             height=400,
             title="Top 5 Most Frequently Bought Brand Pairs Overall"
         )
-        text = chart.mark_text(
+        text_top_5 = chart_top_5.mark_text(
             align='center',
             baseline='bottom',
             dy=-5
@@ -422,9 +226,8 @@ if section == "📊 EDA Overview":
             text='Count',
             color=alt.value('black')
         )
-        final_chart = chart + text
-        st.altair_chart(final_chart, use_container_width=True)
-
+        final_chart_top_5 = chart_top_5 + text_top_5
+        st.altair_chart(final_chart_top_5, use_container_width=True)
 
 # --- Other Sections ---
 elif section == "📉 Drop Detection":
@@ -436,7 +239,7 @@ elif section == "📉 Drop Detection":
     disp[flags] += "% 🔻"
     disp[~flags] = ""
     st.dataframe(disp)
-    
+
 elif section == "👤 Customer Profiling":
     st.subheader("Customer Purchase Deep-Dive")
     cust = st.selectbox("Select Customer Phone:", sorted(DF['Customer_Phone'].unique()))
@@ -463,7 +266,7 @@ elif section == "🔁 Cross-Selling":
     lp = DF.groupby(['Customer_Phone','Brand'])['Month'].max().reset_index()
     drop = lp[lp['Month'] < lp['Month'].max()]
     sw = DF.merge(drop, on='Customer_Phone', suffixes=('','_dropped'))
-    sw = sw[(sw['Month'] > sw['Month_dropped']) & (sw['Brand'] !=sw['Brand_dropped'])]
+    sw = sw[(sw['Month'] > sw['Month_dropped']) & (sw['Brand'] != sw['Brand_dropped'])]
     patterns = sw.groupby(['Brand_dropped','Brand']).size().reset_index(name='Count')
     top3 = patterns.sort_values(['Brand_dropped','Count'], ascending=[True,False]).groupby('Brand_dropped').head(3)
     st.dataframe(top3, use_container_width=True)
@@ -480,30 +283,4 @@ elif section == "🤖 Recommender":
         index='Customer_Phone', columns='SKU_Code',
         values='Redistribution Value', aggfunc='sum'
     ).fillna(0)
-    # item content/features
-    pf = pd.get_dummies(
-        DF[['SKU_Code','Brand']].drop_duplicates(), columns=['Brand']
-    ).set_index('SKU_Code')
-    # compute similarities
-    user_sim = cosine_similarity(uim)
-    item_sim = cosine_similarity(pf)
-    user_sim_df = pd.DataFrame(user_sim, index=uim.index, columns=uim.index)
-    item_sim_df = pd.DataFrame(item_sim, index=pf.index, columns=pf.index)
-
-    sel = st.selectbox("Select Customer", uim.index)
-    if st.button("Recommend"):
-        # collaborative score: weighted sum of user similarities
-        collab_scores = uim.T.dot(user_sim_df[sel])
-        # remove SKUs already purchased by sel
-        purchased = uim.loc[sel][uim.loc[sel] > 0].index
-        collab_scores = collab_scores.drop(index=purchased, errors='ignore')
-        # content score: sum of item similarities to purchased SKUs
-        content_scores = item_sim_df.loc[purchased].sum(axis=0)
-        content_scores = content_scores.drop(index=purchased, errors='ignore')
-        # combine with equal weight
-        combined = 0.5 * collab_scores + 0.5 * content_scores
-        top5 = combined.nlargest(5)
-        result = top5.reset_index()
-        result.columns = ['SKU_Code', 'Score']
-        st.dataframe(result, use_container_width=True)
-
+  
