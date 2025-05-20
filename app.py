@@ -650,6 +650,9 @@ elif section == "👤 Customer Profiling":
     cust = st.selectbox("Select Customer Phone:", sorted(DF['Customer_Phone'].unique()))
     if cust:
         report = analyze_customer_purchases_extended(DF, cust)
+        # Call the updated predict_next_purchases function
+        heuristic_predictions = predict_next_purchases(DF, cust)
+
         if isinstance(report, str):
             st.write(report)
         else:
@@ -660,10 +663,9 @@ elif section == "👤 Customer Profiling":
             st.markdown(f"**Total Order Count:** {report['Total Order Count']}")
             st.markdown(f"**Top Salesperson:** {report['Top Salesperson']}")
             st.markdown(f"**Salesperson Designation:** {report['Salesperson Designation']}")
-            st.markdown(f"**Total Unique SKUs Bought:** {report['Total Unique SKUs Bought']}") 
-            st.markdown(f"**SKUs Bought:** {', '.join(report['SKUs Bought'])}")
+            st.markdown(f"**Total Unique SKUs Bought:** {report['Total Unique SKUs Bought']}")
+            st.markdown(f"**SKUs Bought:** {', '.join(report['SKUs Bought'])}") # Make sure this key is correct
 
-            
             st.subheader("Brand Level Purchase Summary")
             brand_summary_df = pd.DataFrame.from_dict(report['Brand Level Summary'], orient='index')
             brand_summary_df = brand_summary_df.rename_axis('Brand').reset_index()
@@ -676,8 +678,21 @@ elif section == "👤 Customer Profiling":
                 sku_summary_df = sku_summary_df.rename_axis('SKU Code').reset_index()
                 st.dataframe(sku_summary_df, use_container_width=True)
 
-            st.subheader("Next-Purchase Predictions (Heuristic)")
-            st.dataframe(predict_next_purchases(cust), use_container_width=True)
+            st.subheader("SKUs Grouped by Brand")
+            for brand, skus in report['SKUs Grouped by Brand'].items():
+                st.markdown(f"**Brand:** {brand}")
+                st.write(skus) # This might render as a list, which is fine for short lists. For long, consider a DataFrame.
+
+            st.subheader("Next Purchase Predictions (Heuristic)")
+            st.markdown(f"**Most Likely Next Brand Purchase:** {heuristic_predictions['next_brand_prediction']}")
+            st.markdown(f"**Preferred Purchase Time of Day:** {heuristic_predictions['time_of_day_preference']}")
+            st.markdown(f"**Preferred Purchase Day of Week:** {heuristic_predictions['day_of_week_preference']}")
+
+            st.markdown("**Predicted Next SKU Purchases:**")
+            if not heuristic_predictions['sku_predictions'].empty:
+                st.dataframe(heuristic_predictions['sku_predictions'], use_container_width=True)
+            else:
+                st.info("Not enough historical data to predict next SKU purchases for this customer.")
 
 elif section == "👤 Customer Profilling (Model Predictions)":
     st.subheader("Next-Purchase Model Predictions")
