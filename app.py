@@ -172,30 +172,131 @@ def analyze_customer_purchases_extended(df, customer_phone):
 
     return report
 
-def predict_next_purchases(customer_phone):
-    df = DF[DF['Customer_Phone'] == customer_phone].copy()
-    if df.empty:
-        return pd.DataFrame()
-    last_purchase = df.groupby('SKU_Code')['Delivered_date'].max()
+def predict_next_purchases(df_full, customer_phone): # Renamed df to df_full for clarity
+    customer_df = df_full[df_full['Customer_Phone'] == customer_phone].copy()
+
+    if customer_df.empty:
+        return {
+            'sku_predictions': pd.DataFrame(),
+            'next_brand_prediction': 'N/A',
+            'time_of_day_preference': 'N/A',
+            'day_of_week_preference': 'N/A'
+        }
+
+    # Ensure Delivered_date is datetime type
+    customer_df['Delivered_date'] = pd.to_datetime(customer_df['Delivered_date'])
+    customer_df.sort_values('Delivered_date', inplace=True)
+    customer_df['Month'] = customer_df['Delivered_date'].dt.to_period('M')
+
+
+    # --- SKU-Level Predictions ---
+    # 1. Last Purchase Date per SKU
+    last_purchase_date_sku = customer_df.groupby('SKU_Code')['Delivered_date'].max()
+
+    # 2. Average Interval Days per SKU
     avg_interval_days = {}
-    for sku, grp in df.groupby('SKU_Code'):
+    for sku, grp in customer_df.groupby('SKU_Code'):
         dates = grp['Delivered_date'].drop_duplicates().sort_values()
         if len(dates) > 1:
-            avg_interval_days[sku] = int(dates.diff().dt.days.dropna().mean())
+            intervals = dates.diff().dt.days.dropna()
+            if not intervals.empty:
+                avg_interval_days[sku] = int(intervals.mean())
+            else:
+                avg_interval_days[sku] = np.nan # No interval if only 1 unique date
         else:
-            avg_interval_days[sku] = np.nan
-    avg_qty     = df.groupby(['SKU_Code','Month'])['Delivered Qty'].sum().groupby('SKU_Code').mean().round(0)
-    avg_spend = df.groupby(['SKU_Code','Month'])['Total_Amount_Spent'].sum().groupby('SKU_Code').mean().round(0)
-    score_df = pd.DataFrame({
-        'Last Purchase Date': last_purchase.dt.date,
+            avg_interval_days[sku] = np.nan # No interval if only 1 purchase
+
+    # 3. Average Monthly Quantity per SKU
+    avg_qty_sku = customer_df.groupby(['SKU_Code', 'Month'])['Delivered Qty'].sum().groupby('SKU_Code').mean().round(0)
+
+    # 4. Average Monthly Spend per SKU
+    avg_spend_sku = customer_df.groupby(['SKU_Code', 'Month'])['Total_Amount_Spent'].sum().groupby('SKU_Code').mean().round(0)
+
+    # Combine SKU-level predictions
+    sku_predictions_df = pd.DataFrame({
+        'Last Purchase Date': last_purchase_date_sku.dt.date,
         'Avg Interval Days': pd.Series(avg_interval_days),
-        'Expected Quantity': avg_qty,
-        'Expected Spend': avg_spend
-    }).dropna(subset=['Avg Interval Days'])
-    score_df['Next Purchase Date'] = (
-        pd.to_datetime(score_df['Last Purchase Date']) + pd.to_timedelta(score_df['Avg Interval Days'], unit='D')
-    ).dt.date
-    return score_df.sort_values('Avg Interval Days').head(3)[['Next Purchase Date','Expected Spend','Expected Quantity']]
+        'Expected Quantity': avg_qty_sku,
+        'Expected Spend': avg_spend_sku
+    }).dropna(subset=['Avg Interval Days']) # Drop SKUs for which we can't calculate an interval
+
+    # Calculate Next Purchase Date for each SKU
+    if not sku_predictions_df.empty:
+        sku_predictions_df['Next Purchase Date'] = (
+            pd.to_datetime(sku_predictions_df['Last Purchase Date']) +
+            pd.to_timedelta(sku_predictions_df['Avg Interval Days'], unit='D')
+        ).dt.date
+    else:
+        sku_predictions_df['Next Purchase Date'] = pd.NA
+
+    # Select relevant columns and sort for display
+    sku_predictions_df = sku_predictions_df.sort_values('Avg Interval Days').head(5)[ # Top 5 most frequent
+        ['Next Purchase Date', 'Expected Spend', 'Expected Quantity']
+    ]
+
+    # --- Next Brand Prediction ---
+    # We'll use a simple approach: if the customer bought Brand A then Brand B,
+    # what's the most common Brand B after Brand A?
+    # This requires looking at consecutive purchases.
+
+    # Sort purchases by date to determine sequence
+    customer_df_sorted = customer_df.sort_values('Delivered_date')
+
+    # Get last purchased brand (most recent transaction)
+    last_purchased_brand = customer_df_sorted['Brand'].iloc[-1] if not customer_df_sorted.empty else 'N/A'
+
+    # Find brands purchased *after* the last purchased brand
+    # This is complex with multiple items in one order, so we'll simplify to 'order sequence'
+    # Group by order and get the brands in each order
+    order_brands_sequence = customer_df_sorted.groupby('Order_Id')['Brand'].apply(lambda x: list(x.unique()))
+    next_brand_suggestions = Counter()
+    for i in range(len(order_brands_sequence) - 1):
+        current_brands = order_brands_sequence.iloc[i]
+        next_brands = order_brands_sequence.iloc[i+1]
+        # For simplicity, if any brand in the current order matches, consider subsequent brands
+        for cb in current_brands:
+            if cb == last_purchased_brand: # If the last brand was bought in the current order
+                for nb in next_brands:
+                    if nb != cb: # Only suggest a different brand
+                        next_brand_suggestions[nb] += 1
+
+    most_likely_next_brand = 'N/A'
+    if next_brand_suggestions:
+        most_likely_next_brand = next_brand_suggestions.most_common(1)[0][0]
+
+    # --- Time of Day Preference ---
+    customer_df['Purchase_Hour'] = customer_df['Delivered_date'].dt.hour
+    hourly_counts = customer_df['Purchase_Hour'].value_counts().sort_index()
+    time_of_day_preference = 'N/A'
+    if not hourly_counts.empty:
+        # Define time segments
+        def get_time_segment(hour):
+            if 5 <= hour < 12:
+                return "Morning (5 AM - 11:59 AM)"
+            elif 12 <= hour < 17:
+                return "Afternoon (12 PM - 4:59 PM)"
+            elif 17 <= hour < 21:
+                return "Evening (5 PM - 8:59 PM)"
+            else:
+                return "Night (9 PM - 4:59 AM)"
+        customer_df['Time_Segment'] = customer_df['Purchase_Hour'].apply(get_time_segment)
+        time_of_day_preference = customer_df['Time_Segment'].value_counts().idxmax()
+
+
+    # --- Day of Week Preference ---
+    customer_df['Purchase_Day_of_Week'] = customer_df['Delivered_date'].dt.day_name()
+    day_of_week_counts = customer_df['Purchase_Day_of_Week'].value_counts()
+    day_of_week_preference = 'N/A'
+    if not day_of_week_counts.empty:
+        day_of_week_preference = day_of_week_counts.idxmax()
+
+
+    return {
+        'sku_predictions': sku_predictions_df,
+        'next_brand_prediction': most_likely_next_brand,
+        'time_of_day_preference': time_of_day_preference,
+        'day_of_week_preference': day_of_week_preference
+    }
 
 # --- Utility function ---
 def calculate_brand_pairs(df):
