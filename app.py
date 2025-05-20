@@ -167,7 +167,7 @@ def analyze_customer_purchases_extended(df, customer_phone):
         'SKUs Bought': skus_bought, # <--- ADD THIS LINE
         'Brand Level Summary': purchase_summary_by_brand,
         'Brand SKU Level Summary': purchase_summary_by_brand_sku,
-        'SKUs Grouped by Brand': brand_skus
+        #'SKUs Grouped by Brand': brand_skus
     }
 
     return report
@@ -678,10 +678,10 @@ elif section == "👤 Customer Profiling":
                 sku_summary_df = sku_summary_df.rename_axis('SKU Code').reset_index()
                 st.dataframe(sku_summary_df, use_container_width=True)
 
-            st.subheader("SKUs Grouped by Brand")
-            for brand, skus in report['SKUs Grouped by Brand'].items():
-                st.markdown(f"**Brand:** {brand}")
-                st.write(skus) # This might render as a list, which is fine for short lists. For long, consider a DataFrame.
+            #st.subheader("SKUs Grouped by Brand")
+            #for brand, skus in report['SKUs Grouped by Brand'].items():
+            #    st.markdown(f"**Brand:** {brand}")
+            #    st.write(skus) # This might render as a list, which is fine for short lists. For long, consider a DataFrame.
 
             st.subheader("Next Purchase Predictions (Heuristic)")
             st.markdown(f"**Most Likely Next Brand Purchase:** {heuristic_predictions['next_brand_prediction']}")
