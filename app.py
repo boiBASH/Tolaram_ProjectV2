@@ -76,6 +76,8 @@ def analyze_customer_purchases_extended(df, customer_phone):
 
     # 2. SKUs of each Brand Bought
     brand_skus = customer_df.groupby('Brand')['SKU_Code'].unique().apply(list).to_dict()
+    total_unique_skus_bought = customer_df['SKU_Code'].nunique() # Add this line
+    skus_bought = customer_df['SKU_Code'].unique().tolist() # Add this line
 
     # 3. Purchase Summary by Brand
     purchase_summary_by_brand = {}
@@ -164,8 +166,9 @@ def analyze_customer_purchases_extended(df, customer_phone):
         'Brand Level Summary': purchase_summary_by_brand,
         'Brand SKU Level Summary': purchase_summary_by_brand_sku,
         'SKUs Grouped by Brand': brand_skus
-        #'Total Unique SKUs Bought': 
-        #'SKUs Bought':
+        'Total Unique SKUs Bought': total_unique_skus_bought, # Add this line
+        'SKUs Bought': skus_bought, # Add this line
+        'Brand Level Summary': purchase_summary_by_brand,
     }
 
     return report
@@ -557,8 +560,8 @@ elif section == "👤 Customer Profiling":
             st.markdown(f"**Total Order Count:** {report['Total Order Count']}")
             st.markdown(f"**Top Salesperson:** {report['Top Salesperson']}")
             st.markdown(f"**Salesperson Designation:** {report['Salesperson Designation']}")
-            #st.markdown(f"**Total Unique SKUs Bought:** {report['Total Unique SKUs Bought']}")
-            #st.markdown(f"**SKUs Bought:** {', '.join(report['SKUs Bought'])}")
+            st.markdown(f"**Total Unique SKUs Bought:** {report['Total Unique SKUs Bought']}") 
+            st.markdown(f"**SKUs Bought:** {', '.join(report['SKUs Bought'])}")
 
             st.subheader("Brand Level Purchase Summary")
             brand_summary_df = pd.DataFrame.from_dict(report['Brand Level Summary'], orient='index')
