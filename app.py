@@ -671,10 +671,10 @@ elif section == "👤 Customer Profiling":
                 sku_summary_df = sku_summary_df.rename_axis('SKU Code').reset_index()
                 st.dataframe(sku_summary_df, use_container_width=True)
 
-            st.subheader("SKUs Grouped by Brand")
-            for brand, skus in report['SKUs Grouped by Brand'].items():
-                st.markdown(f"**Brand:** {brand}")
-                st.write(skus)
+            #st.subheader("SKUs Grouped by Brand")
+            #for brand, skus in report['SKUs Grouped by Brand'].items():
+            #    st.markdown(f"**Brand:** {brand}")
+            #    st.write(skus)
 
             # --- IMPROVED NEXT-PURCHASE PREDICTIONS DISPLAY ---
             st.subheader("Next Purchase Predictions (Heuristic)")
