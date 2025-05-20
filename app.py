@@ -692,7 +692,8 @@ elif section == "🤖 Recommender":
         index='Customer_Phone', columns='SKU_Code',
         values='Redistribution Value', aggfunc='sum'
     ).fillna(0)
-    # item content/features
+
+    
     pf = pd.get_dummies(
         DF[['SKU_Code','Brand']].drop_duplicates(), columns=['Brand']
     ).set_index('SKU_Code')
@@ -709,7 +710,7 @@ elif section == "🤖 Recommender":
         # remove SKUs already purchased by sel
         purchased = uim.loc[sel][uim.loc[sel] > 0].index
         collab_scores = collab_scores.drop(index=purchased, errors='ignore')
-        # content score: sum of item similarities to purchased SKUs
+
         content_scores = item_sim_df.loc[purchased].sum(axis=0)
         content_scores = content_scores.drop(index=purchased, errors='ignore')
         # combine with equal weight
