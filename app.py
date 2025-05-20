@@ -116,7 +116,7 @@ def analyze_customer_purchases_extended(df, customer_phone):
                     'Avg Monthly Quantity': 0.0,
                     'Avg Monthly Spend': 0.0
                 }
-
+                
     # 5. Salesman Analysis
     most_sold_salesman_info = 'N/A'
     salesman_designation = 'N/A'
@@ -172,13 +172,14 @@ def analyze_customer_purchases_extended(df, customer_phone):
 
     return report
 
-def predict_next_purchases(df_full, customer_phone): # Renamed df to df_full for clarity
+
+def predict_next_purchases(df_full, customer_phone):
     customer_df = df_full[df_full['Customer_Phone'] == customer_phone].copy()
 
     if customer_df.empty:
         return {
             'sku_predictions': pd.DataFrame(),
-            'next_brand_prediction': 'N/A',
+            'overall_next_brand_prediction': 'N/A', # Renamed for clarity
             'time_of_day_preference': 'N/A',
             'day_of_week_preference': 'N/A'
         }
@@ -202,9 +203,9 @@ def predict_next_purchases(df_full, customer_phone): # Renamed df to df_full for
             if not intervals.empty:
                 avg_interval_days[sku] = int(intervals.mean())
             else:
-                avg_interval_days[sku] = np.nan # No interval if only 1 unique date
+                avg_interval_days[sku] = np.nan
         else:
-            avg_interval_days[sku] = np.nan # No interval if only 1 purchase
+            avg_interval_days[sku] = np.nan
 
     # 3. Average Monthly Quantity per SKU
     avg_qty_sku = customer_df.groupby(['SKU_Code', 'Month'])['Delivered Qty'].sum().groupby('SKU_Code').mean().round(0)
@@ -212,73 +213,60 @@ def predict_next_purchases(df_full, customer_phone): # Renamed df to df_full for
     # 4. Average Monthly Spend per SKU
     avg_spend_sku = customer_df.groupby(['SKU_Code', 'Month'])['Total_Amount_Spent'].sum().groupby('SKU_Code').mean().round(0)
 
+    # 5. Get Brand for each SKU
+    sku_to_brand = customer_df[['SKU_Code', 'Brand']].drop_duplicates().set_index('SKU_Code')['Brand']
+
+
     # Combine SKU-level predictions
     sku_predictions_df = pd.DataFrame({
         'Last Purchase Date': last_purchase_date_sku.dt.date,
         'Avg Interval Days': pd.Series(avg_interval_days),
         'Expected Quantity': avg_qty_sku,
         'Expected Spend': avg_spend_sku
-    }).dropna(subset=['Avg Interval Days']) # Drop SKUs for which we can't calculate an interval
+    }).dropna(subset=['Avg Interval Days'])
 
-    # Calculate Next Purchase Date for each SKU
     if not sku_predictions_df.empty:
         sku_predictions_df['Next Purchase Date'] = (
             pd.to_datetime(sku_predictions_df['Last Purchase Date']) +
             pd.to_timedelta(sku_predictions_df['Avg Interval Days'], unit='D')
         ).dt.date
+        # Add Brand to the SKU predictions DataFrame
+        sku_predictions_df = sku_predictions_df.merge(sku_to_brand.rename('Brand'), left_index=True, right_index=True, how='left')
     else:
         sku_predictions_df['Next Purchase Date'] = pd.NA
+        sku_predictions_df['Brand'] = pd.NA
 
-    # Select relevant columns and sort for display
-    sku_predictions_df = sku_predictions_df.sort_values('Avg Interval Days').head(5)[ # Top 5 most frequent
-        ['Next Purchase Date', 'Expected Spend', 'Expected Quantity']
-    ]
 
-    # --- Next Brand Prediction ---
-    # We'll use a simple approach: if the customer bought Brand A then Brand B,
-    # what's the most common Brand B after Brand A?
-    # This requires looking at consecutive purchases.
+    # Select relevant columns and sort for display in the combined table
+    # Renamed columns for better display in the final table
+    sku_predictions_df = sku_predictions_df.reset_index().rename(columns={
+        'index': 'SKU Code',
+        'Next Purchase Date': 'Likely Purchase Date',
+        'Brand': 'Likely Brand', # Added 'Likely Brand'
+        'Expected Quantity': 'Expected Quantity',
+        'Expected Spend': 'Expected Spend'
+    })
+    # Sort by Likely Purchase Date or Avg Interval Days if available, otherwise by SKU
+    sku_predictions_df = sku_predictions_df.sort_values(
+        by='Likely Purchase Date', ascending=True
+    ).head(5) # Top 5 predictions
 
-    # Sort purchases by date to determine sequence
-    customer_df_sorted = customer_df.sort_values('Delivered_date')
 
-    # Get last purchased brand (most recent transaction)
-    last_purchased_brand = customer_df_sorted['Brand'].iloc[-1] if not customer_df_sorted.empty else 'N/A'
+    # --- Overall Next Brand Prediction (based on last bought brands) ---
+    # This is a simpler heuristic: what was the most recently bought brand?
+    overall_next_brand_prediction = customer_df_sorted['Brand'].iloc[-1] if not customer_df_sorted.empty else 'N/A'
 
-    # Find brands purchased *after* the last purchased brand
-    # This is complex with multiple items in one order, so we'll simplify to 'order sequence'
-    # Group by order and get the brands in each order
-    order_brands_sequence = customer_df_sorted.groupby('Order_Id')['Brand'].apply(lambda x: list(x.unique()))
-    next_brand_suggestions = Counter()
-    for i in range(len(order_brands_sequence) - 1):
-        current_brands = order_brands_sequence.iloc[i]
-        next_brands = order_brands_sequence.iloc[i+1]
-        # For simplicity, if any brand in the current order matches, consider subsequent brands
-        for cb in current_brands:
-            if cb == last_purchased_brand: # If the last brand was bought in the current order
-                for nb in next_brands:
-                    if nb != cb: # Only suggest a different brand
-                        next_brand_suggestions[nb] += 1
-
-    most_likely_next_brand = 'N/A'
-    if next_brand_suggestions:
-        most_likely_next_brand = next_brand_suggestions.most_common(1)[0][0]
 
     # --- Time of Day Preference ---
     customer_df['Purchase_Hour'] = customer_df['Delivered_date'].dt.hour
     hourly_counts = customer_df['Purchase_Hour'].value_counts().sort_index()
     time_of_day_preference = 'N/A'
     if not hourly_counts.empty:
-        # Define time segments
         def get_time_segment(hour):
-            if 5 <= hour < 12:
-                return "Morning (5 AM - 11:59 AM)"
-            elif 12 <= hour < 17:
-                return "Afternoon (12 PM - 4:59 PM)"
-            elif 17 <= hour < 21:
-                return "Evening (5 PM - 8:59 PM)"
-            else:
-                return "Night (9 PM - 4:59 AM)"
+            if 5 <= hour < 12: return "Morning (5 AM - 11:59 AM)"
+            elif 12 <= hour < 17: return "Afternoon (12 PM - 4:59 PM)"
+            elif 17 <= hour < 21: return "Evening (5 PM - 8:59 PM)"
+            else: return "Night (9 PM - 4:59 AM)"
         customer_df['Time_Segment'] = customer_df['Purchase_Hour'].apply(get_time_segment)
         time_of_day_preference = customer_df['Time_Segment'].value_counts().idxmax()
 
@@ -293,11 +281,10 @@ def predict_next_purchases(df_full, customer_phone): # Renamed df to df_full for
 
     return {
         'sku_predictions': sku_predictions_df,
-        'next_brand_prediction': most_likely_next_brand,
+        'overall_next_brand_prediction': overall_next_brand_prediction, # Renamed key
         'time_of_day_preference': time_of_day_preference,
         'day_of_week_preference': day_of_week_preference
     }
-
 # --- Utility function ---
 def calculate_brand_pairs(df):
     """
@@ -650,8 +637,7 @@ elif section == "👤 Customer Profiling":
     cust = st.selectbox("Select Customer Phone:", sorted(DF['Customer_Phone'].unique()))
     if cust:
         report = analyze_customer_purchases_extended(DF, cust)
-        # Call the updated predict_next_purchases function
-        heuristic_predictions = predict_next_purchases(DF, cust)
+        heuristic_predictions = predict_next_purchases(DF, cust) # Call the updated function
 
         if isinstance(report, str):
             st.write(report)
@@ -664,7 +650,7 @@ elif section == "👤 Customer Profiling":
             st.markdown(f"**Top Salesperson:** {report['Top Salesperson']}")
             st.markdown(f"**Salesperson Designation:** {report['Salesperson Designation']}")
             st.markdown(f"**Total Unique SKUs Bought:** {report['Total Unique SKUs Bought']}")
-            st.markdown(f"**SKUs Bought:** {', '.join(report['SKUs Bought'])}") # Make sure this key is correct
+            st.markdown(f"**SKUs Bought:** {', '.join(report['SKUs Bought'])}")
 
             st.subheader("Brand Level Purchase Summary")
             brand_summary_df = pd.DataFrame.from_dict(report['Brand Level Summary'], orient='index')
@@ -678,21 +664,30 @@ elif section == "👤 Customer Profiling":
                 sku_summary_df = sku_summary_df.rename_axis('SKU Code').reset_index()
                 st.dataframe(sku_summary_df, use_container_width=True)
 
-            #st.subheader("SKUs Grouped by Brand")
-            #for brand, skus in report['SKUs Grouped by Brand'].items():
-            #    st.markdown(f"**Brand:** {brand}")
-            #    st.write(skus) # This might render as a list, which is fine for short lists. For long, consider a DataFrame.
+            st.subheader("SKUs Grouped by Brand")
+            for brand, skus in report['SKUs Grouped by Brand'].items():
+                st.markdown(f"**Brand:** {brand}")
+                st.write(skus)
 
+            # --- IMPROVED NEXT-PURCHASE PREDICTIONS DISPLAY ---
             st.subheader("Next Purchase Predictions (Heuristic)")
-            st.markdown(f"**Most Likely Next Brand Purchase:** {heuristic_predictions['next_brand_prediction']}")
+            st.markdown(f"**Overall Most Recently Bought Brand:** {heuristic_predictions['overall_next_brand_prediction']}") # Renamed to reflect heuristic
             st.markdown(f"**Preferred Purchase Time of Day:** {heuristic_predictions['time_of_day_preference']}")
             st.markdown(f"**Preferred Purchase Day of Week:** {heuristic_predictions['day_of_week_preference']}")
 
-            st.markdown("**Predicted Next SKU Purchases:**")
+            st.markdown("---") # Separator for clarity
+
+            st.markdown("**Predicted Next Purchases (SKU Level):**")
             if not heuristic_predictions['sku_predictions'].empty:
-                st.dataframe(heuristic_predictions['sku_predictions'], use_container_width=True)
+                # Display the combined SKU prediction table
+                st.dataframe(
+                    heuristic_predictions['sku_predictions'][[
+                        'Likely Brand', 'SKU Code', 'Likely Purchase Date', 'Expected Quantity', 'Expected Spend'
+                    ]],
+                    use_container_width=True
+                )
             else:
-                st.info("Not enough historical data to predict next SKU purchases for this customer.")
+                st.info("Not enough historical data to provide detailed SKU purchase predictions for this customer.")
 
 elif section == "👤 Customer Profilling (Model Predictions)":
     st.subheader("Next-Purchase Model Predictions")
