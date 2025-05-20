@@ -172,15 +172,16 @@ def analyze_customer_purchases_extended(df, customer_phone):
 
     return report
 
+
 def predict_next_purchases(df_full, customer_phone):
     customer_df = df_full[df_full['Customer_Phone'] == customer_phone].copy()
 
     if customer_df.empty:
         return {
             'sku_predictions': pd.DataFrame(),
-            'overall_next_brand_prediction': 'N/A', # Renamed for clarity
-            'time_of_day_preference': 'N/A',
-            'day_of_week_preference': 'N/A'
+            'overall_most_recent_brand': 'N/A', # Changed name for clarity
+            'preferred_purchase_time_of_day': 'N/A', # Changed name for clarity
+            'preferred_purchase_day_of_week': 'N/A' # Changed name for clarity
         }
 
     # Ensure Delivered_date is datetime type
@@ -189,10 +190,7 @@ def predict_next_purchases(df_full, customer_phone):
     customer_df['Month'] = customer_df['Delivered_date'].dt.to_period('M')
 
     # Define customer_df_sorted immediately after initial processing
-    # This ensures it's always defined if customer_df was not empty
     customer_df_sorted = customer_df.sort_values('Delivered_date')
-
-
 
 
     # --- SKU-Level Predictions ---
@@ -243,31 +241,28 @@ def predict_next_purchases(df_full, customer_phone):
 
 
     # Select relevant columns and sort for display in the combined table
-    # Renamed columns for better display in the final table
     sku_predictions_df = sku_predictions_df.reset_index().rename(columns={
         'index': 'SKU Code',
         'Next Purchase Date': 'Likely Purchase Date',
-        'Brand': 'Likely Brand', # Added 'Likely Brand'
+        'Brand': 'Likely Brand',
         'Expected Quantity': 'Expected Quantity',
         'Expected Spend': 'Expected Spend'
     })
-    # Sort by Likely Purchase Date or Avg Interval Days if available, otherwise by SKU
+    # Sort by Likely Purchase Date (earliest first) and limit to Top 3
     sku_predictions_df = sku_predictions_df.sort_values(
         by='Likely Purchase Date', ascending=True
-    ).head(5) # Top 5 predictions
+    ).head(3) # <-- Changed to head(3) for Top 3
 
 
-    # --- Overall Next Brand Prediction (based on last bought brands) ---
-    # This is a simpler heuristic: what was the most recently bought brand?
-    #overall_next_brand_prediction = customer_df_sorted['Brand'].iloc[-1] if not customer_df_sorted.empty else 'N/A'
-    overall_next_brand_prediction = customer_df_sorted['Brand'].iloc[-1] if not customer_df_sorted.empty else 'N/A' # This line was causing the error
+    # --- Overall Most Recently Bought Brand ---
+    # This specifically refers to the brand of the last *single* item purchased by the customer.
+    overall_most_recent_brand = customer_df_sorted['Brand'].iloc[-1] if not customer_df_sorted.empty else 'N/A'
 
 
-
-    # --- Time of Day Preference ---
+    # --- Preferred Purchase Time of Day ---
     customer_df['Purchase_Hour'] = customer_df['Delivered_date'].dt.hour
     hourly_counts = customer_df['Purchase_Hour'].value_counts().sort_index()
-    time_of_day_preference = 'N/A'
+    preferred_purchase_time_of_day = 'N/A'
     if not hourly_counts.empty:
         def get_time_segment(hour):
             if 5 <= hour < 12: return "Morning (5 AM - 11:59 AM)"
@@ -275,23 +270,25 @@ def predict_next_purchases(df_full, customer_phone):
             elif 17 <= hour < 21: return "Evening (5 PM - 8:59 PM)"
             else: return "Night (9 PM - 4:59 AM)"
         customer_df['Time_Segment'] = customer_df['Purchase_Hour'].apply(get_time_segment)
-        time_of_day_preference = customer_df['Time_Segment'].value_counts().idxmax()
+        preferred_purchase_time_of_day = customer_df['Time_Segment'].value_counts().idxmax()
 
 
-    # --- Day of Week Preference ---
+    # --- Preferred Purchase Day of Week ---
     customer_df['Purchase_Day_of_Week'] = customer_df['Delivered_date'].dt.day_name()
     day_of_week_counts = customer_df['Purchase_Day_of_Week'].value_counts()
-    day_of_week_preference = 'N/A'
+    preferred_purchase_day_of_week = 'N/A'
     if not day_of_week_counts.empty:
-        day_of_week_preference = day_of_week_counts.idxmax()
+        preferred_purchase_day_of_week = day_of_week_counts.idxmax()
 
 
     return {
         'sku_predictions': sku_predictions_df,
-        'overall_next_brand_prediction': overall_next_brand_prediction,
-        'time_of_day_preference': time_of_day_preference,
-        'day_of_week_preference': day_of_week_preference
+        'overall_most_recent_brand': overall_most_recent_brand, # Changed name here
+        'preferred_purchase_time_of_day': preferred_purchase_time_of_day, # Changed name here
+        'preferred_purchase_day_of_week': preferred_purchase_day_of_week # Changed name here
     }
+
+
 # --- Utility function ---
 def calculate_brand_pairs(df):
     """
@@ -644,7 +641,7 @@ elif section == "👤 Customer Profiling":
     cust = st.selectbox("Select Customer Phone:", sorted(DF['Customer_Phone'].unique()))
     if cust:
         report = analyze_customer_purchases_extended(DF, cust)
-        heuristic_predictions = predict_next_purchases(DF, cust) # Call the updated function
+        heuristic_predictions = predict_next_purchases(DF, cust)
 
         if isinstance(report, str):
             st.write(report)
@@ -671,16 +668,16 @@ elif section == "👤 Customer Profiling":
                 sku_summary_df = sku_summary_df.rename_axis('SKU Code').reset_index()
                 st.dataframe(sku_summary_df, use_container_width=True)
 
-            #st.subheader("SKUs Grouped by Brand")
-            #for brand, skus in report['SKUs Grouped by Brand'].items():
-            #    st.markdown(f"**Brand:** {brand}")
-            #    st.write(skus)
+            st.subheader("SKUs Grouped by Brand")
+            for brand, skus in report['SKUs Grouped by Brand'].items():
+                st.markdown(f"**Brand:** {brand}")
+                st.write(skus)
 
             # --- IMPROVED NEXT-PURCHASE PREDICTIONS DISPLAY ---
             st.subheader("Next Purchase Predictions (Heuristic)")
-            st.markdown(f"**Overall Most Recently Bought Brand:** {heuristic_predictions['overall_next_brand_prediction']}") # Renamed to reflect heuristic
-            st.markdown(f"**Preferred Purchase Time of Day:** {heuristic_predictions['time_of_day_preference']}")
-            st.markdown(f"**Preferred Purchase Day of Week:** {heuristic_predictions['day_of_week_preference']}")
+            st.markdown(f"**Overall Most Recently Purchased Brand:** {heuristic_predictions['overall_most_recent_brand']}") # Displaying with clarified name
+            st.markdown(f"**Customer's Preferred Time of Day for Purchases:** {heuristic_predictions['preferred_purchase_time_of_day']}")
+            st.markdown(f"**Customer's Preferred Day of Week for Purchases:** {heuristic_predictions['preferred_purchase_day_of_week']}")
 
             st.markdown("---") # Separator for clarity
 
@@ -688,13 +685,12 @@ elif section == "👤 Customer Profiling":
             if not heuristic_predictions['sku_predictions'].empty:
                 # Display the combined SKU prediction table
                 st.dataframe(
-                    heuristic_predictions['sku_predictions'][[
-                        'Likely Brand', 'SKU Code', 'Likely Purchase Date', 'Expected Quantity', 'Expected Spend'
-                    ]],
+                    heuristic_predictions['sku_predictions'], # Use the pre-selected columns from the function itself
                     use_container_width=True
                 )
             else:
                 st.info("Not enough historical data to provide detailed SKU purchase predictions for this customer.")
+
 
 elif section == "👤 Customer Profilling (Model Predictions)":
     st.subheader("Next-Purchase Model Predictions")
