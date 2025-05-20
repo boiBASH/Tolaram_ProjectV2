@@ -163,12 +163,11 @@ def analyze_customer_purchases_extended(df, customer_phone):
         'Total Order Count': total_order_count,
         'Top Salesperson': most_sold_salesman_info,
         'Salesperson Designation': salesman_designation,
+        'Total Unique SKUs Bought': total_unique_skus_bought, # <--- ADD THIS LINE
+        'SKUs Bought': skus_bought, # <--- ADD THIS LINE
         'Brand Level Summary': purchase_summary_by_brand,
         'Brand SKU Level Summary': purchase_summary_by_brand_sku,
-        'SKUs Grouped by Brand': brand_skus,
-        'Total Unique SKUs Bought': total_unique_skus_bought, # Add this line
-        'SKUs Bought': skus_bought, # Add this line
-        'Brand Level Summary': purchase_summary_by_brand
+        'SKUs Grouped by Brand': brand_skus
     }
 
     return report
