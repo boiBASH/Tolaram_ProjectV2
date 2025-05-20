@@ -165,10 +165,10 @@ def analyze_customer_purchases_extended(df, customer_phone):
         'Salesperson Designation': salesman_designation,
         'Brand Level Summary': purchase_summary_by_brand,
         'Brand SKU Level Summary': purchase_summary_by_brand_sku,
-        'SKUs Grouped by Brand': brand_skus
+        'SKUs Grouped by Brand': brand_skus,
         'Total Unique SKUs Bought': total_unique_skus_bought, # Add this line
         'SKUs Bought': skus_bought, # Add this line
-        'Brand Level Summary': purchase_summary_by_brand,
+        'Brand Level Summary': purchase_summary_by_brand
     }
 
     return report
