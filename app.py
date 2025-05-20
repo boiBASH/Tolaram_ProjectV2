@@ -172,7 +172,6 @@ def analyze_customer_purchases_extended(df, customer_phone):
 
     return report
 
-
 def predict_next_purchases(df_full, customer_phone):
     customer_df = df_full[df_full['Customer_Phone'] == customer_phone].copy()
 
@@ -188,6 +187,12 @@ def predict_next_purchases(df_full, customer_phone):
     customer_df['Delivered_date'] = pd.to_datetime(customer_df['Delivered_date'])
     customer_df.sort_values('Delivered_date', inplace=True)
     customer_df['Month'] = customer_df['Delivered_date'].dt.to_period('M')
+
+    # Define customer_df_sorted immediately after initial processing
+    # This ensures it's always defined if customer_df was not empty
+    customer_df_sorted = customer_df.sort_values('Delivered_date')
+
+
 
 
     # --- SKU-Level Predictions ---
@@ -254,7 +259,9 @@ def predict_next_purchases(df_full, customer_phone):
 
     # --- Overall Next Brand Prediction (based on last bought brands) ---
     # This is a simpler heuristic: what was the most recently bought brand?
-    overall_next_brand_prediction = customer_df_sorted['Brand'].iloc[-1] if not customer_df_sorted.empty else 'N/A'
+    #overall_next_brand_prediction = customer_df_sorted['Brand'].iloc[-1] if not customer_df_sorted.empty else 'N/A'
+    overall_next_brand_prediction = customer_df_sorted['Brand'].iloc[-1] if not customer_df_sorted.empty else 'N/A' # This line was causing the error
+
 
 
     # --- Time of Day Preference ---
@@ -281,7 +288,7 @@ def predict_next_purchases(df_full, customer_phone):
 
     return {
         'sku_predictions': sku_predictions_df,
-        'overall_next_brand_prediction': overall_next_brand_prediction, # Renamed key
+        'overall_next_brand_prediction': overall_next_brand_prediction,
         'time_of_day_preference': time_of_day_preference,
         'day_of_week_preference': day_of_week_preference
     }
