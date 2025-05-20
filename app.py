@@ -555,6 +555,8 @@ elif section == "👤 Customer Profiling":
             st.markdown(f"**Total Order Count:** {report['Total Order Count']}")
             st.markdown(f"**Top Salesperson:** {report['Top Salesperson']}")
             st.markdown(f"**Salesperson Designation:** {report['Salesperson Designation']}")
+            st.markdown(f"*Total Unique SKUs Bought:* {report['Total Unique SKUs Bought']}")
+            st.markdown(f"*SKUs Bought:* {', '.join(report['SKUs Bought'])}")
 
             st.subheader("Brand Level Purchase Summary")
             brand_summary_df = pd.DataFrame.from_dict(report['Brand Level Summary'], orient='index')
@@ -567,11 +569,6 @@ elif section == "👤 Customer Profiling":
                 sku_summary_df = pd.DataFrame.from_dict(sku_summary, orient='index')
                 sku_summary_df = sku_summary_df.rename_axis('SKU Code').reset_index()
                 st.dataframe(sku_summary_df, use_container_width=True)
-
-            st.subheader("SKUs Grouped by Brand")
-            for brand, skus in report['SKUs Grouped by Brand'].items():
-                st.markdown(f"**Brand:** {brand}")
-                st.write(skus)
 
             st.subheader("Next-Purchase Predictions (Heuristic)")
             st.dataframe(predict_next_purchases(cust), use_container_width=True)
