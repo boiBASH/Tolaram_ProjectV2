@@ -561,6 +561,7 @@ elif section == "👤 Customer Profiling":
             st.markdown(f"**Salesperson Designation:** {report['Salesperson Designation']}")
             st.markdown(f"**Total Unique SKUs Bought:** {report['Total Unique SKUs Bought']}") 
             st.markdown(f"**SKUs Bought:** {', '.join(report['SKUs Bought'])}")
+            #st.markdown(f"**SKUs Bought:** {', '.join(report['SKUs Bought'])}")
 
             st.subheader("Brand Level Purchase Summary")
             brand_summary_df = pd.DataFrame.from_dict(report['Brand Level Summary'], orient='index')
