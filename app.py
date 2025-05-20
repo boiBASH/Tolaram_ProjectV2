@@ -164,8 +164,8 @@ def analyze_customer_purchases_extended(df, customer_phone):
         'Brand Level Summary': purchase_summary_by_brand,
         'Brand SKU Level Summary': purchase_summary_by_brand_sku,
         'SKUs Grouped by Brand': brand_skus
-        'Total Unique SKUs Bought': 
-        'SKUs Bought':
+        #'Total Unique SKUs Bought': 
+        #'SKUs Bought':
     }
 
     return report
