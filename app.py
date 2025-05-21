@@ -657,8 +657,8 @@ elif section == "📉 Drop Detection":
             m = mom_val.get(brand)
             p = prev_revenue.get(brand)
 
-            mom_str = f"{m:.1f}%" if pd.notna(m) else "Not Applicable"
-            prev_str = f"{int(p):,}" if pd.notna(p) else "Not Applicable"
+            mom_str = f"{m:.1f}%" if pd.notna(m) else "No Data"
+            prev_str = f"{int(p):,}" if pd.notna(p) else "No Data"
             arrow = ""
             if pd.notna(m):
                 if m > 0:
@@ -684,8 +684,8 @@ elif section == "📉 Drop Detection":
         # Merge based on Brand and Month
         negative_brands_info = pd.merge(negative_mom_changes, melted_revenue, on=['Brand', 'Month'], how='left')
 
-        negative_brands_info['MoM Change Formatted'] = negative_brands_info['MoM Change'].apply(lambda x: f"{x:.1f}%🔻" if pd.notna(x) else "Not Applicable")
-        negative_brands_info['Previous Month Revenue Formatted'] = negative_brands_info['Previous Month Revenue'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "Not Applicable")
+        negative_brands_info['MoM Change Formatted'] = negative_brands_info['MoM Change'].apply(lambda x: f"{x:.1f}%🔻" if pd.notna(x) else "No Data")
+        negative_brands_info['Previous Month Revenue Formatted'] = negative_brands_info['Previous Month Revenue'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "No Data")
 
         display_negative = negative_brands_info[['Brand', 'Month', 'MoM Change Formatted', 'Previous Month Revenue Formatted']]
         display_negative.columns = ['Brand', 'Month', 'MoM Change', 'Previous Month Revenue']
