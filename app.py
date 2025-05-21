@@ -172,7 +172,7 @@ def analyze_customer_purchases_extended(df, customer_phone):
         'SKUs Bought': skus_bought,
         'Brand Level Summary': purchase_summary_by_brand,
         'Brand SKU Level Summary': purchase_summary_by_brand_sku,
-        'SKUs Grouped by Brand': brand_skus
+        #'SKUs Grouped by Brand': brand_skus
     }
 
     return report
@@ -372,7 +372,7 @@ def combined_report_recommender(customer_phone, user_item_matrix, hybrid_similar
 
     # Combine and order columns
     combined = pd.concat([past_purchases, recommendations[['SKU_Code', 'Brand', 'Similarity_Score', 'Type']]], ignore_index=True)
-    combined = combined[['Type', 'SKU_Code', 'Brand', 'Similarity_Score']] # Ensure consistent column order
+    combined = combined[['Type', 'Brand', 'SKU_Code', 'Similarity_Score']] # Ensure consistent column order
     return combined
 
 # --- UI Setup ---
@@ -724,11 +724,6 @@ elif section == "👤 Customer Profiling":
                 sku_summary_df = pd.DataFrame.from_dict(sku_summary, orient='index')
                 sku_summary_df = sku_summary_df.rename_axis('SKU Code').reset_index()
                 st.dataframe(sku_summary_df, use_container_width=True)
-
-            st.subheader("SKUs Grouped by Brand")
-            for brand, skus in report['SKUs Grouped by Brand'].items():
-                st.markdown(f"**Brand:** {brand}")
-                st.write(skus)
 
             # --- IMPROVED NEXT-PURCHASE PREDICTIONS DISPLAY ---
             st.subheader("Next Purchase Predictions (Heuristic)")
