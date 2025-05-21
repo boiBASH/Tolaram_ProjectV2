@@ -621,7 +621,6 @@ elif section == "📉 Drop Detection":
         "\n- Values in the table represent the MoM percentage change in revenue. \n"
         "- Upward trend is indicated by ⬆️, and downward trend by🔻. \n"
         "- Previous month's revenue is shown in parentheses to provide context."
-        , unsafe_allow_html=True
     )
 
     # --- 1. Data Preparation ---
@@ -675,7 +674,7 @@ elif section == "📉 Drop Detection":
         # Merge based on Brand and Month
         negative_brands_info = pd.merge(negative_mom_changes, melted_revenue, on=['Brand', 'Month'], how='left')
 
-        negative_brands_info['MoM Change Formatted'] = negative_brands_info['MoM Change'].apply(lambda x: f"{x:.1f}% <span style='color:red'>🔻</span>" if pd.notna(x) else "Not Applicable")
+        negative_brands_info['MoM Change Formatted'] = negative_brands_info['MoM Change'].apply(lambda x: f"{x:.1f}%🔻" if pd.notna(x) else "Not Applicable")
         negative_brands_info['Previous Month Revenue Formatted'] = negative_brands_info['Previous Month Revenue'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "Not Applicable")
 
         display_negative = negative_brands_info[['Brand', 'Month', 'MoM Change Formatted', 'Previous Month Revenue Formatted']]
