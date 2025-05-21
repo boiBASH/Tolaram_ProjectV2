@@ -660,7 +660,7 @@ elif section == "📉 Drop Detection":
 
         display_df[f"{col}\n(Prev. Month\nRevenue)"] = formatted_values
 
-    st.dataframe(display_df, use_container_width=True, unsafe_allow_html=True) # Added unsafe_allow_html=True
+    st.dataframe(display_df, use_container_width=True)
 
     # --- 3. Identify and Display Brands with Negative MoM Change ---
     negative_mom_changes = mom_change[mom_change < 0].stack().reset_index(name='MoM Change')
