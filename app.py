@@ -689,7 +689,7 @@ elif section == "📉 Drop Detection":
                 "Previous Month Revenue",
                 help="Revenue in the previous month.",
             ),
-        }, unsafe_allow_html=True) # Added unsafe_allow_html=True
+        })
     else:
         st.info("No brands experienced a month-over-month revenue decrease in the selected period.")
 
