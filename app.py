@@ -5,11 +5,14 @@ import altair as alt
 from itertools import combinations
 from collections import Counter
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.preprocessing import OneHotEncoder # Import OneHotEncoder
 from datetime import datetime
 from PIL import Image
 
+
 # Must be first Streamlit command
 st.set_page_config(page_title="Sales Intelligence Dashboard", layout="wide")
+
 # --- Data Loading & Preprocessing ---
 @st.cache_data
 def load_sales_data():
@@ -25,6 +28,9 @@ def load_sales_data():
     df['Month'] = df['Delivered_date'].dt.to_period('M')
     df['Delivered Qty'] = df['Delivered Qty'].fillna(0)
     df['Total_Amount_Spent'] = df['Redistribution Value'] * df['Delivered Qty']
+    # Ensure 'Order_Id' is present for some calculations if missing
+    if 'Order_Id' not in df.columns:
+        df['Order_Id'] = df['Customer_Phone'].astype(str) + '_' + df['Delivered_date'].dt.strftime('%Y%m%d%H%M%S') + '_' + df.groupby(['Customer_Phone', 'Delivered_date']).cumcount().astype(str)
     return df
 
 @st.cache_data
@@ -75,8 +81,8 @@ def analyze_customer_purchases_extended(df, customer_phone):
 
     # 2. SKUs of each Brand Bought
     brand_skus = customer_df.groupby('Brand')['SKU_Code'].unique().apply(list).to_dict()
-    total_unique_skus_bought = customer_df['SKU_Code'].nunique() # Add this line
-    skus_bought = customer_df['SKU_Code'].unique().tolist() # Add this line
+    total_unique_skus_bought = customer_df['SKU_Code'].nunique()
+    skus_bought = customer_df['SKU_Code'].unique().tolist()
 
     # 3. Purchase Summary by Brand
     purchase_summary_by_brand = {}
@@ -115,7 +121,7 @@ def analyze_customer_purchases_extended(df, customer_phone):
                     'Avg Monthly Quantity': 0.0,
                     'Avg Monthly Spend': 0.0
                 }
-                
+
     # 5. Salesman Analysis
     most_sold_salesman_info = 'N/A'
     salesman_designation = 'N/A'
@@ -162,11 +168,11 @@ def analyze_customer_purchases_extended(df, customer_phone):
         'Total Order Count': total_order_count,
         'Top Salesperson': most_sold_salesman_info,
         'Salesperson Designation': salesman_designation,
-        'Total Unique SKUs Bought': total_unique_skus_bought, # <--- ADD THIS LINE
-        'SKUs Bought': skus_bought, # <--- ADD THIS LINE
+        'Total Unique SKUs Bought': total_unique_skus_bought,
+        'SKUs Bought': skus_bought,
         'Brand Level Summary': purchase_summary_by_brand,
         'Brand SKU Level Summary': purchase_summary_by_brand_sku,
-        #'SKUs Grouped by Brand': brand_skus
+        'SKUs Grouped by Brand': brand_skus
     }
 
     return report
@@ -178,15 +184,13 @@ def predict_next_purchases(df_full, customer_phone):
         return {
             'sku_predictions': pd.DataFrame(),
             'overall_next_brand_prediction': 'N/A',
-            # Removed 'time_of_day_preference' from default return
-            # Removed 'day_of_week_preference' from default return
         }
 
     customer_df['Delivered_date'] = pd.to_datetime(customer_df['Delivered_date'])
     customer_df.sort_values('Delivered_date', inplace=True)
     customer_df['Month'] = customer_df['Delivered_date'].dt.to_period('M')
 
-    customer_df_sorted = customer_df.sort_values('Delivered_date') # Ensure this is defined
+    customer_df_sorted = customer_df.sort_values('Delivered_date')
 
 
     # --- SKU-Level Predictions ---
@@ -223,14 +227,6 @@ def predict_next_purchases(df_full, customer_phone):
         )
         sku_predictions_df = sku_predictions_df.merge(sku_to_brand.rename('Brand'), left_index=True, right_index=True, how='left')
 
-        # --- Calculate Day of Week Preference for the Predicted Date ---
-        # Get the overall preferred day of the week
-        customer_df['Purchase_Day_of_Week'] = customer_df['Delivered_date'].dt.day_name()
-        day_of_week_counts = customer_df['Purchase_Day_of_Week'].value_counts()
-        preferred_day_of_week_overall = day_of_week_counts.idxmax() if not day_of_week_counts.empty else 'Unknown'
-
-        # Apply the preferred day of the week to the *predicted* date if it's different
-        # This is a bit advanced for a simple heuristic, so let's simplify to just append the day name
         sku_predictions_df['Likely Purchase Date'] = sku_predictions_df['Next Purchase Date'].dt.strftime('%Y-%m-%d') + ' (' + sku_predictions_df['Next Purchase Date'].dt.day_name() + ')'
 
     else:
@@ -239,27 +235,23 @@ def predict_next_purchases(df_full, customer_phone):
         sku_predictions_df['Likely Purchase Date'] = pd.NA
 
 
-    # Select relevant columns and sort for display in the combined table
     sku_predictions_df = sku_predictions_df.reset_index().rename(columns={
         'index': 'SKU Code',
         'Brand': 'Likely Brand',
     })
-    # Limit to top 3 predictions
     sku_predictions_df = sku_predictions_df.sort_values(
         by='Next Purchase Date', ascending=True
-    ).head(3) # <--- Changed to .head(3)
+    ).head(3) # Changed to .head(3)
 
-    # --- Overall Next Brand Prediction ---
-    # This remains the last purchased brand as the heuristic for overall next brand context
+
     overall_next_brand_prediction = customer_df_sorted['Brand'].iloc[-1] if not customer_df_sorted.empty else 'N/A'
 
 
     return {
         'sku_predictions': sku_predictions_df,
         'overall_next_brand_prediction': overall_next_brand_prediction,
-        # Removed 'time_of_day_preference' from the return
-        # Removed 'day_of_week_preference' from the return
     }
+
 # --- Utility function ---
 def calculate_brand_pairs(df):
     """
@@ -289,6 +281,99 @@ def calculate_brand_pairs(df):
 # --- Load Data ---
 DF = load_sales_data()
 PRED_DF = load_model_preds()
+
+# --- Recommender System Data Preparation (Cached) ---
+@st.cache_data
+def prepare_recommender_data(df_full):
+    # Item-Item Collaborative Filtering (using Redistribution Value)
+    user_item_matrix = df_full.pivot_table(index='Customer_Phone', columns='SKU_Code',
+                                           values='Redistribution Value', aggfunc='sum', fill_value=0)
+    item_similarity = cosine_similarity(user_item_matrix.T)
+    item_similarity_df = pd.DataFrame(item_similarity,
+                                      index=user_item_matrix.columns,
+                                      columns=user_item_matrix.columns)
+
+    # Content-Based Filtering (using Brand and Branch)
+    # Ensure 'Branch' column exists and handle potential missing values
+    item_attributes_cols = ['SKU_Code', 'Brand']
+    if 'Branch' in df_full.columns:
+        item_attributes_cols.append('Branch')
+
+    item_attributes = df_full[item_attributes_cols].drop_duplicates(subset=['SKU_Code']).set_index('SKU_Code')
+
+    # Handle potential non-string types in 'Brand' or 'Branch' before OneHotEncoding
+    for col in ['Brand', 'Branch']:
+        if col in item_attributes.columns:
+            item_attributes[col] = item_attributes[col].astype(str).fillna('Unknown')
+
+    encoder = OneHotEncoder(handle_unknown='ignore') # handle_unknown='ignore' for new categories
+    item_features_encoded = encoder.fit_transform(item_attributes)
+    content_similarity = cosine_similarity(item_features_encoded)
+    content_similarity_df = pd.DataFrame(content_similarity,
+                                          index=item_attributes.index,
+                                          columns=item_attributes.index)
+
+    # Hybrid Similarity
+    common_skus = item_similarity_df.index.intersection(content_similarity_df.index)
+    if common_skus.empty:
+        st.warning("No common SKUs found between collaborative and content-based models. Hybrid recommendations may not be possible.")
+        return None, None, None # Return None if no common SKUs
+
+    filtered_item_similarity = item_similarity_df.loc[common_skus, common_skus]
+    filtered_content_similarity = content_similarity_df.loc[common_skus, common_skus]
+    hybrid_similarity = (filtered_item_similarity + filtered_content_similarity) / 2
+
+    # SKU to Brand mapping for recommendations display
+    sku_brand_map = df_full[['SKU_Code', 'Brand']].drop_duplicates(subset='SKU_Code').set_index('SKU_Code')
+
+    return user_item_matrix, hybrid_similarity, sku_brand_map
+
+# --- Recommendation Functions ---
+def recommend_skus_brands(customer_phone, user_item_matrix, hybrid_similarity, sku_brand_map, top_n=5):
+    if customer_phone not in user_item_matrix.index:
+        return pd.DataFrame() # Return empty if customer not in matrix
+
+    purchased_skus = user_item_matrix.loc[customer_phone]
+    purchased_skus = purchased_skus[purchased_skus > 0].index.tolist()
+
+    if not purchased_skus:
+        return pd.DataFrame() # Return empty if customer hasn't purchased anything
+
+    # Filter hybrid_similarity to only include SKUs that are in the matrix
+    valid_purchased_skus = [sku for sku in purchased_skus if sku in hybrid_similarity.columns]
+    if not valid_purchased_skus:
+        return pd.DataFrame() # No valid purchased SKUs for similarity calculation
+
+    # Calculate scores for all SKUs based on purchased_skus
+    sku_scores = hybrid_similarity[valid_purchased_skus].mean(axis=1)
+
+    # Remove already purchased SKUs from recommendations
+    sku_scores = sku_scores.drop(index=[s for s in purchased_skus if s in sku_scores.index], errors='ignore')
+
+    if sku_scores.empty:
+        return pd.DataFrame() # No recommendations if all are purchased or no scores
+
+    top_skus = sku_scores.sort_values(ascending=False).head(top_n)
+
+    # Ensure recommended SKUs exist in the sku_brand_map
+    recommendations = sku_brand_map.loc[top_skus.index.intersection(sku_brand_map.index)].copy()
+    recommendations['Similarity_Score'] = top_skus.loc[recommendations.index].values
+    return recommendations.reset_index()
+
+def combined_report_recommender(customer_phone, user_item_matrix, hybrid_similarity, df_full, sku_brand_map, top_n=5):
+    # Past Purchases
+    past_purchases = df_full[df_full['Customer_Phone'] == customer_phone][['SKU_Code', 'Brand']].drop_duplicates()
+    past_purchases['Type'] = 'Previously Purchased'
+    past_purchases['Similarity_Score'] = np.nan # No score for past purchases
+
+    # Recommendations
+    recommendations = recommend_skus_brands(customer_phone, user_item_matrix, hybrid_similarity, sku_brand_map, top_n)
+    recommendations['Type'] = 'Recommended'
+
+    # Combine and order columns
+    combined = pd.concat([past_purchases, recommendations[['SKU_Code', 'Brand', 'Similarity_Score', 'Type']]], ignore_index=True)
+    combined = combined[['Type', 'SKU_Code', 'Brand', 'Similarity_Score']] # Ensure consistent column order
+    return combined
 
 # --- UI Setup ---
 logo = Image.open("logo.png")
@@ -467,6 +552,7 @@ if section == "📊 EDA Overview":
         chart_cust_qty = alt.Chart(top_buyers_qty_with_name.reset_index()).mark_bar().encode(
             x=alt.X('Delivered Qty', title='Total Quantity', axis=alt.Axis(format=',.2s')),
             y=alt.Y('Customer_Info', sort='-x', title='Customer'),
+            color=alt.Color('Delivered Qty'),
             tooltip=['Customer_Info', 'Delivered Qty']
         ).properties(height=500)
         st.altair_chart(chart_cust_qty, use_container_width=True)
@@ -533,7 +619,7 @@ elif section == "📉 Drop Detection":
     st.markdown(
         "**NB:**"
         "\n- Values in the table represent the MoM percentage change in revenue. \n"
-        "- Upward trend is indicated by ⬆️, and downward trend by 🔻. \n"
+        "- Upward trend is indicated by <span style='color:green'>⬆️</span>, and downward trend by <span style='color:red'>🔻</span>. \n"
         "- Previous month's revenue is shown in parentheses to provide context."
         , unsafe_allow_html=True
     )
@@ -567,14 +653,14 @@ elif section == "📉 Drop Detection":
             arrow = ""
             if pd.notna(m):
                 if m > 0:
-                    arrow = "⬆️"
+                    arrow = " <span style='color:green'>⬆️</span>"
                 elif m < 0:
-                    arrow = "🔻"
+                    arrow = " <span style='color:red'>🔻</span>"
             formatted_values.append(f"{mom_str}{arrow} ({prev_str})")
 
         display_df[f"{col}\n(Prev. Month\nRevenue)"] = formatted_values
 
-    st.dataframe(display_df, use_container_width=True)
+    st.dataframe(display_df, use_container_width=True, unsafe_allow_html=True) # Added unsafe_allow_html=True
 
     # --- 3. Identify and Display Brands with Negative MoM Change ---
     negative_mom_changes = mom_change[mom_change < 0].stack().reset_index(name='MoM Change')
@@ -589,7 +675,7 @@ elif section == "📉 Drop Detection":
         # Merge based on Brand and Month
         negative_brands_info = pd.merge(negative_mom_changes, melted_revenue, on=['Brand', 'Month'], how='left')
 
-        negative_brands_info['MoM Change Formatted'] = negative_brands_info['MoM Change'].apply(lambda x: f"{x:.1f}%🔻" if pd.notna(x) else "Not Applicable")
+        negative_brands_info['MoM Change Formatted'] = negative_brands_info['MoM Change'].apply(lambda x: f"{x:.1f}% <span style='color:red'>🔻</span>" if pd.notna(x) else "Not Applicable")
         negative_brands_info['Previous Month Revenue Formatted'] = negative_brands_info['Previous Month Revenue'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "Not Applicable")
 
         display_negative = negative_brands_info[['Brand', 'Month', 'MoM Change Formatted', 'Previous Month Revenue Formatted']]
@@ -603,7 +689,7 @@ elif section == "📉 Drop Detection":
                 "Previous Month Revenue",
                 help="Revenue in the previous month.",
             ),
-        })
+        }, unsafe_allow_html=True) # Added unsafe_allow_html=True
     else:
         st.info("No brands experienced a month-over-month revenue decrease in the selected period.")
 
@@ -639,10 +725,10 @@ elif section == "👤 Customer Profiling":
                 sku_summary_df = sku_summary_df.rename_axis('SKU Code').reset_index()
                 st.dataframe(sku_summary_df, use_container_width=True)
 
-            #st.subheader("SKUs Grouped by Brand")
-            #for brand, skus in report['SKUs Grouped by Brand'].items():
-            #    st.markdown(f"**Brand:** {brand}")
-            #    st.write(skus)
+            st.subheader("SKUs Grouped by Brand")
+            for brand, skus in report['SKUs Grouped by Brand'].items():
+                st.markdown(f"**Brand:** {brand}")
+                st.write(skus)
 
             # --- IMPROVED NEXT-PURCHASE PREDICTIONS DISPLAY ---
             st.subheader("Next Purchase Predictions (Heuristic)")
@@ -687,35 +773,44 @@ elif section == "🔗 Brand Correlation":
 
 elif section == "🤖 Recommender":
     st.subheader("Hybrid SKU Recommendations")
-    # user-item interaction matrix
-    uim = DF.pivot_table(
-        index='Customer_Phone', columns='SKU_Code',
-        values='Redistribution Value', aggfunc='sum'
-    ).fillna(0)
+    st.markdown(
+        "This section provides personalized SKU recommendations based on a hybrid approach, "
+        "combining your past purchases with similar customers' behavior and item attributes."
+    )
 
-    
-    pf = pd.get_dummies(
-        DF[['SKU_Code','Brand']].drop_duplicates(), columns=['Brand']
-    ).set_index('SKU_Code')
-    # compute similarities
-    user_sim = cosine_similarity(uim)
-    item_sim = cosine_similarity(pf)
-    user_sim_df = pd.DataFrame(user_sim, index=uim.index, columns=uim.index)
-    item_sim_df = pd.DataFrame(item_sim, index=pf.index, columns=pf.index)
+    # Prepare recommender data (cached)
+    user_item_matrix, hybrid_similarity, sku_brand_map = prepare_recommender_data(DF)
 
-    sel = st.selectbox("Select Customer", uim.index)
-    if st.button("Recommend"):
-        # collaborative score: weighted sum of user similarities
-        collab_scores = uim.T.dot(user_sim_df[sel])
-        # remove SKUs already purchased by sel
-        purchased = uim.loc[sel][uim.loc[sel] > 0].index
-        collab_scores = collab_scores.drop(index=purchased, errors='ignore')
+    if user_item_matrix is None or hybrid_similarity is None or sku_brand_map is None:
+        st.warning("Recommender system could not be initialized due to missing data or common SKUs.")
+    else:
+        # Get list of customers from the user-item matrix
+        customer_list = sorted(user_item_matrix.index.tolist())
+        sel_customer_recommender = st.selectbox("Select Customer for Recommendations:", customer_list)
 
-        content_scores = item_sim_df.loc[purchased].sum(axis=0)
-        content_scores = content_scores.drop(index=purchased, errors='ignore')
-        # combine with equal weight
-        combined = 0.5 * collab_scores + 0.5 * content_scores
-        top5 = combined.nlargest(5)
-        result = top5.reset_index()
-        result.columns = ['SKU_Code', 'Score']
-        st.dataframe(result, use_container_width=True)
+        if st.button("Generate Recommendations"):
+            if sel_customer_recommender:
+                st.subheader(f"Recommendations for Customer {sel_customer_recommender}")
+
+                combined_recs_report = combined_report_recommender(
+                    sel_customer_recommender, user_item_matrix, hybrid_similarity, DF, sku_brand_map, top_n=5
+                )
+
+                if not combined_recs_report.empty:
+                    st.dataframe(combined_recs_report, use_container_width=True, column_config={
+                        "Similarity_Score": st.column_config.NumberColumn(
+                            "Similarity Score",
+                            format="%.4f", # Format to 4 decimal places
+                            help="Higher score indicates stronger similarity/recommendation."
+                        )
+                    })
+                    st.markdown("---")
+                    st.info(
+                        "**NB:** 'Previously Purchased' items show your past buying history. "
+                        "'Recommended' items are new suggestions based on the hybrid model. "
+                        "A higher 'Similarity Score' indicates a stronger recommendation."
+                    )
+                else:
+                    st.info("No recommendations could be generated for this customer, or they haven't purchased any SKUs yet.")
+            else:
+                st.info("Please select a customer to generate recommendations.")
