@@ -360,21 +360,31 @@ def recommend_skus_brands(customer_phone, user_item_matrix, hybrid_similarity, s
     recommendations['Similarity_Score'] = top_skus.loc[recommendations.index].values
     return recommendations.reset_index()
 
+#def combined_report_recommender(customer_phone, user_item_matrix, hybrid_similarity, df_full, sku_brand_map, top_n=5):
+    # Past Purchases
+    #past_purchases = df_full[df_full['Customer_Phone'] == customer_phone][['SKU_Code', 'Brand']].drop_duplicates()
+    #past_purchases['Type'] = 'Previously Purchased'
+    #past_purchases['Similarity_Score'] = np.nan # No score for past purchases
+
+    # Recommendations
+    #recommendations = recommend_skus_brands(customer_phone, user_item_matrix, hybrid_similarity, sku_brand_map, top_n)
+    #recommendations['Type'] = 'Recommended'
+
+    # Combine and order columns
+    #combined = pd.concat([past_purchases, recommendations[['SKU_Code', 'Brand', 'Similarity_Score', 'Type']]], ignore_index=True)
+    #combined = combined[['Type', 'Brand', 'SKU_Code', 'Similarity_Score']] # Ensure consistent column order
+    #return combined
 def combined_report_recommender(customer_phone, user_item_matrix, hybrid_similarity, df_full, sku_brand_map, top_n=5):
     # Past Purchases
     past_purchases = df_full[df_full['Customer_Phone'] == customer_phone][['SKU_Code', 'Brand']].drop_duplicates()
-    past_purchases['Type'] = 'Previously Purchased'
-    past_purchases['Similarity_Score'] = np.nan # No score for past purchases
+    # No 'Type' or 'Similarity_Score' needed for this table
 
     # Recommendations
     recommendations = recommend_skus_brands(customer_phone, user_item_matrix, hybrid_similarity, sku_brand_map, top_n)
-    recommendations['Type'] = 'Recommended'
+    # The 'Type' column can be added for internal filtering if needed, but not for display now.
+    # The 'Similarity_Score' is already in 'recommendations' DataFrame.
 
-    # Combine and order columns
-    combined = pd.concat([past_purchases, recommendations[['SKU_Code', 'Brand', 'Similarity_Score', 'Type']]], ignore_index=True)
-    combined = combined[['Type', 'Brand', 'SKU_Code', 'Similarity_Score']] # Ensure consistent column order
-    return combined
-
+    return past_purchases, recommendations # Return two separate DataFrames
 # --- UI Setup ---
 logo = Image.open("logo.png")
 st.sidebar.image(logo, width=80)
@@ -786,25 +796,34 @@ elif section == "🤖 Recommender":
             if sel_customer_recommender:
                 st.subheader(f"Recommendations for Customer {sel_customer_recommender}")
 
-                combined_recs_report = combined_report_recommender(
+                # Call the updated function to get two DataFrames
+                past_purchases_df, recommendations_df = combined_report_recommender(
                     sel_customer_recommender, user_item_matrix, hybrid_similarity, DF, sku_brand_map, top_n=5
                 )
 
-                if not combined_recs_report.empty:
-                    st.dataframe(combined_recs_report, use_container_width=True, column_config={
+                # --- Display Previously Purchased SKUs ---
+                st.markdown("### Previously Purchased SKUs")
+                if not past_purchases_df.empty:
+                    st.dataframe(past_purchases_df, use_container_width=True)
+                else:
+                    st.info("No past purchase data found for this customer.")
+
+                st.markdown("---") # Separator
+
+                # --- Display Recommended SKUs ---
+                st.markdown("### Recommended SKUs")
+                if not recommendations_df.empty:
+                    st.dataframe(recommendations_df, use_container_width=True, column_config={
                         "Similarity_Score": st.column_config.NumberColumn(
                             "Similarity Score",
                             format="%.4f", # Format to 4 decimal places
                             help="Higher score indicates stronger similarity/recommendation."
                         )
                     })
-                    st.markdown("---")
                     st.info(
-                        "**NB:** 'Previously Purchased' items show your past buying history. "
-                        "'Recommended' items are new suggestions based on the hybrid model. "
                         "A higher 'Similarity Score' indicates a stronger recommendation."
                     )
                 else:
-                    st.info("No recommendations could be generated for this customer, or they haven't purchased any SKUs yet.")
+                    st.info("No new recommendations could be generated for this customer.")
             else:
                 st.info("Please select a customer to generate recommendations.")
