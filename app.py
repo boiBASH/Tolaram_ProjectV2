@@ -619,7 +619,7 @@ elif section == "📉 Drop Detection":
     st.markdown(
         "**NB:**"
         "\n- Values in the table represent the MoM percentage change in revenue. \n"
-        "- Upward trend is indicated by <span style='color:green'>⬆️</span>, and downward trend by <span style='color:red'>🔻</span>. \n"
+        "- Upward trend is indicated by ⬆️, and downward trend by🔻. \n"
         "- Previous month's revenue is shown in parentheses to provide context."
         , unsafe_allow_html=True
     )
@@ -653,9 +653,9 @@ elif section == "📉 Drop Detection":
             arrow = ""
             if pd.notna(m):
                 if m > 0:
-                    arrow = " <span style='color:green'>⬆️</span>"
+                    arrow = "⬆️"
                 elif m < 0:
-                    arrow = " <span style='color:red'>🔻</span>"
+                    arrow = "🔻"
             formatted_values.append(f"{mom_str}{arrow} ({prev_str})")
 
         display_df[f"{col}\n(Prev. Month\nRevenue)"] = formatted_values
