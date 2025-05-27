@@ -388,7 +388,7 @@ def combined_report_recommender(customer_phone, user_item_matrix, hybrid_similar
 # --- UI Setup ---
 logo = Image.open("logo.png")
 st.sidebar.image(logo, width=150)
-st.sidebar.title("🚀 SALES INSIGHTS DASHBOARDS")
+st.sidebar.title("SALES DASHBOARD 🚀")
 section = st.sidebar.radio(
     "Sections:",
     [
