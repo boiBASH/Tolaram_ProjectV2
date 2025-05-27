@@ -387,10 +387,10 @@ def combined_report_recommender(customer_phone, user_item_matrix, hybrid_similar
     return past_purchases, recommendations # Return two separate DataFrames
 # --- UI Setup ---
 logo = Image.open("logo.png")
-st.sidebar.image(logo, width=120)
-st.sidebar.title("🚀 Sales Insights")
+st.sidebar.image(logo, width=150)
+st.sidebar.title("🚀 SALES INSIGHTS DASHBOARDS")
 section = st.sidebar.radio(
-    "Select Section:",
+    "Sections:",
     [
         "📊 EDA Overview", "📉 Drop Detection", "👤 Customer Profiling",
         "🧑‍💻 Customer Profilling (Model Predictions)", "🔁 Cross-Selling", 
