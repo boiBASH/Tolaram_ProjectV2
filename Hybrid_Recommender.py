@@ -60,5 +60,5 @@ def combined_report(customer_phone, user_item_matrix, hybrid_similarity, data, t
 example_customer = user_item_matrix.index[0]
 combined_customer_report = combined_report(example_customer, user_item_matrix, hybrid_similarity, data)
 
-# Display
+# Display in a user friendly manner
 print(combined_customer_report)
