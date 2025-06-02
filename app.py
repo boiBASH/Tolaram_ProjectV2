@@ -754,11 +754,15 @@ elif section == "👤 Customer Profiling":
 
 elif section == "🧑‍💻 Customer Profilling (Model Predictions)":
     st.subheader("Next-Purchase Model Predictions")
-    cust = st.selectbox("Customer:", sorted(PRED_DF['Customer_Phone'].unique()))
-    if cust:
-        p = PRED_DF[PRED_DF['Customer_Phone'] == cust].drop(columns=['Customer_Phone']).set_index('SKU_Code')
-        p['Probability'] = p['Probability'].map(lambda x: f"{x:.1f}%")
-        st.dataframe(p, use_container_width=True)
+    st.markdown(
+        "This section provides personalized SKU recommendations based on a hybrid approach, "
+        "combining your past purchases with similar customers' behavior and item attributes."
+    )
+    #cust = st.selectbox("Customer:", sorted(PRED_DF['Customer_Phone'].unique()))
+    #if cust:
+    #    p = PRED_DF[PRED_DF['Customer_Phone'] == cust].drop(columns=['Customer_Phone']).set_index('SKU_Code')
+    #    p['Probability'] = p['Probability'].map(lambda x: f"{x:.1f}%")
+    #    st.dataframe(p, use_container_width=True)
 
 elif section == "🔁 Cross-Selling":
     st.subheader("Brand Switching Patterns (Top 3)")
