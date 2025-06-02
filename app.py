@@ -754,6 +754,11 @@ elif section == "👤 Customer Profiling":
 
 elif section == "👤 Customer Profilling (Model Predictions)":
     st.subheader("Next-Purchase Model Predictions")
+    st.markdown(
+        "This section provides personalized SKU recommendations based on a hybrid approach, "
+        "combining your past purchases with similar customers' behavior and item attributes."
+    )
+
     #cust = st.selectbox("Customer:", sorted(PRED_DF['Customer_Phone'].unique()))
     #if cust:
     #    p = PRED_DF[PRED_DF['Customer_Phone'] == cust].drop(columns=['Customer_Phone']).set_index('SKU_Code')
