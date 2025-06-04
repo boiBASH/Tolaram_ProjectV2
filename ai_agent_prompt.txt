@@ -1,0 +1,49 @@
+what would you recommend that i use to keep customer 8039230738 to buy more
+
+
+For November 2024, I need a comprehensive overview:
+What was the total number of unique orders placed?
+What was the total sales value (Redistribution Value)?
+Who was our best-performing salesman by total sales value? Please provide their name and the exact value they generated.
+
+
+
+Now, lets look at October 2024. Identify the best-performing salesman based on both total sales value and the total number of orders. Provide their name, the precise total sales value, and the exact count of orders they processed.
+
+
+Show me the top 5 brands by Redistribution Value across the entire dataset. Can you also visualize this data clearly as a horizontal bar chart for easy comparison?
+
+
+I need to understand the monthly trend of Total_Amount_Spent for our top 3 brands (based on overall Redistribution Value) over the entire data period (August 2024 to January 2025). Please plot this as a line chart, ensuring each brand has its own distinct line.
+
+
+Are there any brands that experienced a significant month-over-month drop in Redistribution Value (e.g., more than 15%) in the last three months of the dataset (November 2024, December 2024, January 2025)? If so, provide the brand names and their respective percentage drops.
+
+
+What are the top 10 most frequently co-purchased SKU_Code pairs in our dataset? Please present this as a horizontal bar chart showing the pairs and their co-occurrence counts.
+
+
+Provide a comprehensive purchase profile for customer with phone number 8060733751. This report should include:
+Their total unique brands bought.
+A list of all unique SKUs they have purchased.
+A summary of their purchases by brand, detailing the last purchase date and total amount spent for each brand.
+Identify their most frequently associated salesperson.
+
+
+For customer 9016204667, what are the top 3 SKUs they are heuristically predicted to purchase next, based on their past buying patterns? For each prediction, include the predicted purchase date, the expected quantity, and the expected spend.
+
+
+Generate personalized SKU recommendations for customer 8036906036. I need to see both their previously purchased SKUs and the top 5 recommended SKUs along with their similarity scores.
+
+
+Who are the top 3 salesmen by Total_Amount_Spent across all branches for the entire dataset? Provide their names and their exact total sales figures.
+
+
+I need a cross-tabulation showing the count of Order_Id for each Salesman_Name per Branch. This will help me understand sales distribution and identify any regional performance disparities.
+
+
+
+Plot the monthly Total_Amount_Spent for our top 5 salesmen (by overall value) from August 2024 to January 2025. Use a line chart with each salesman as a separate line.
+
+
+Give me a complete, high-level overview of our sales data, focusing on key insights and actionable recommendations. This should cover top-performing brands, customer lifetime value, and significant co-purchase patterns. I want a summary that I can present to the board.

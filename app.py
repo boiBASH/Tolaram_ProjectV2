@@ -1,829 +1,350 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import altair as alt
+import matplotlib.pyplot as plt
+import seaborn as sns
+from smolagents import CodeAgent, LiteLLMModel, Tool
+import datetime
+import io
 from itertools import combinations
 from collections import Counter
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.preprocessing import OneHotEncoder # Import OneHotEncoder
-from datetime import datetime
-from PIL import Image
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, accuracy_score
 
+# --- Streamlit Page Config ---
+st.set_page_config(page_title="Sales AI Agent", layout="wide")
 
-# Must be first Streamlit command
-st.set_page_config(page_title="Sales Intelligence Dashboard", layout="wide")
+st.title("📊 Sales Intelligence AI Agent")
+st.markdown("Ask me anything about your sales data from August 2024 to January 2025!")
 
-# --- Data Loading & Preprocessing ---
+# --- Data Loading (with Streamlit Caching) ---
 @st.cache_data
-def load_sales_data():
-    df = pd.read_csv("data_sample_analysis.csv", encoding='latin1')
-    df['Redistribution Value'] = (
-        df['Redistribution Value']
-        .str.replace(',', '', regex=False)
-        .astype(float)
-    )
-    df['Delivered_date'] = pd.to_datetime(
-        df['Delivered_date'], errors='coerce', dayfirst=True
-    )
-    df['Month'] = df['Delivered_date'].dt.to_period('M')
-    df['Delivered Qty'] = df['Delivered Qty'].fillna(0)
-    df['Total_Amount_Spent'] = df['Redistribution Value'] * df['Delivered Qty']
-    # Ensure 'Order_Id' is present for some calculations if missing
-    if 'Order_Id' not in df.columns:
-        df['Order_Id'] = df['Customer_Phone'].astype(str) + '_' + df['Delivered_date'].dt.strftime('%Y%m%d%H%M%S') + '_' + df.groupby(['Customer_Phone', 'Delivered_date']).cumcount().astype(str)
-    return df
+def load_sales_data_for_agent():
+    try:
+        df_loaded = pd.read_csv("data_sample_analysis.csv", encoding='latin1')
+        # ... (rest of your df loading and preprocessing logic) ...
+        df_loaded['Redistribution Value'] = df_loaded['Redistribution Value'].str.replace(',', '', regex=False).astype(float)
+        df_loaded['Delivered_date'] = pd.to_datetime(df_loaded['Delivered_date'], errors='coerce', dayfirst=True)
+        df_loaded['Month'] = df_loaded['Delivered_date'].dt.to_period('M')
+        df_loaded['Delivered Qty'] = df_loaded['Delivered Qty'].fillna(0)
+        df_loaded['Total_Amount_Spent'] = df_loaded['Redistribution Value'] * df_loaded['Delivered Qty']
+        if 'Order_Id' not in df_loaded.columns:
+            df_loaded['Order_Id'] = df_loaded['Customer_Phone'].astype(str) + '_' + \
+                                    df_loaded['Delivered_date'].dt.strftime('%Y%m%d%H%M%S') + '_' + \
+                                    df_loaded.groupby(['Customer_Phone', 'Delivered_date']).cumcount().astype(str)
+        return df_loaded
+    except Exception as e:
+        st.error(f"Error loading sales data: {e}. Please ensure 'data_sample_analysis.csv' is available.")
+        return pd.DataFrame()
 
 @st.cache_data
-def load_model_preds():
-    preds = pd.read_csv(
-        "purchase_predictions_major.csv",
-        parse_dates=["last_purchase_date", "pred_next_date"],
-    )
-    preds = preds.rename(columns={
-        "pred_next_brand":     "Next Brand Purchase",
-        "pred_next_date":      "Next Purchase Date",
-        "pred_spend":          "Expected Spend",
-        "pred_qty":            "Expected Quantity",
-        "probability":         "Probability"
-    })
-    preds["Next Purchase Date"] = preds["Next Purchase Date"].dt.date
-    preds["Expected Spend"] = preds["Expected Spend"].round(0).astype(int)
-    preds["Expected Quantity"] = preds["Expected Quantity"].round(0).astype(int)
-    preds["Probability"] = (preds["Probability"] * 100).round(1)
-    def suggest(p):
-        if p >= 70:
-            return "Follow-up/Alert"
-        if p >= 50:
-            return "Cross Sell"
-        return "Discount"
-    preds["Suggestion"] = preds["Probability"].apply(suggest)
-    return preds
-
-# --- Heuristic Profiling Functions ---
-def analyze_customer_purchases_extended(df, customer_phone):
-    customer_df = df[df['Customer_Phone'] == customer_phone].copy()
-
-    if customer_df.empty:
-        return f"No data found for customer phone: {customer_phone}"
-
-    # Ensure date is sorted
-    customer_df.sort_values('Delivered_date', inplace=True)
-
-    # Add Month column
-    customer_df['Month'] = customer_df['Delivered_date'].dt.to_period('M')
-
-    # Basic customer information
-    customer_name = customer_df['Customer_Name'].iloc[0] if not customer_df.empty else 'N/A'
-
-    # 1. Total Brands Bought
-    brands_bought = customer_df['Brand'].unique().tolist()
-    total_brands_bought = len(brands_bought)
-
-    # 2. SKUs of each Brand Bought
-    brand_skus = customer_df.groupby('Brand')['SKU_Code'].unique().apply(list).to_dict()
-    total_unique_skus_bought = customer_df['SKU_Code'].nunique()
-    skus_bought = customer_df['SKU_Code'].unique().tolist()
-
-    # 3. Purchase Summary by Brand
-    purchase_summary_by_brand = {}
-    for brand in brands_bought:
-        brand_df = customer_df[customer_df['Brand'] == brand]
-        last_purchase_date = brand_df['Delivered_date'].max().strftime('%Y-%m-%d') if not brand_df.empty else 'N/A'
-        total_quantity = brand_df['Delivered Qty'].sum()
-        total_spent = brand_df['Total_Amount_Spent'].sum()
-        purchase_summary_by_brand[brand] = {
-            'Last Purchase Date': last_purchase_date,
-            'Total Quantity Bought': total_quantity,
-            'Total Amount Spent': round(total_spent, 2)
-        }
-
-    # 4. Purchase Summary for Brand SKU
-    purchase_summary_by_brand_sku = {}
-    for brand, skus in brand_skus.items():
-        purchase_summary_by_brand_sku[brand] = {}
-        for sku in skus:
-            sku_df = customer_df[(customer_df['Brand'] == brand) & (customer_df['SKU_Code'] == sku)]
-            if not sku_df.empty:
-                last_purchase = sku_df['Delivered_date'].max().strftime('%Y-%m-%d')
-                monthly_qty_series = sku_df.groupby('Month')['Delivered Qty'].sum()
-                avg_monthly_qty = monthly_qty_series.mean().round(2) if not monthly_qty_series.empty else 0.0
-                monthly_spend_series = sku_df.groupby('Month')['Total_Amount_Spent'].sum()
-                avg_monthly_spend = monthly_spend_series.mean().round(2) if not monthly_spend_series.empty else 0.0
-
-                purchase_summary_by_brand_sku[brand][sku] = {
-                    'Last Purchase Date': last_purchase,
-                    'Avg Monthly Quantity': avg_monthly_qty,
-                    'Avg Monthly Spend': avg_monthly_spend
-                }
-            else:
-                purchase_summary_by_brand_sku[brand][sku] = {
-                    'Last Purchase Date': 'N/A',
-                    'Avg Monthly Quantity': 0.0,
-                    'Avg Monthly Spend': 0.0
-                }
-
-    # 5. Salesman Analysis
-    most_sold_salesman_info = 'N/A'
-    salesman_designation = 'N/A'
-
-    if 'Salesman_Name' in customer_df.columns and 'Order_Id' in customer_df.columns and not customer_df.empty:
-        salesman_unique_order_counts = customer_df.groupby('Salesman_Name')['Order_Id'].nunique()
-
-        if not salesman_unique_order_counts.empty and salesman_unique_order_counts.max() > 0:
-            most_sold_salesman_name = salesman_unique_order_counts.idxmax()
-            most_sold_salesman_count = salesman_unique_order_counts.max()
-            most_sold_salesman_info = f"{most_sold_salesman_name} ({int(most_sold_salesman_count)} orders)"
-
-            if 'Designation' in customer_df.columns and not customer_df[customer_df['Salesman_Name'] == most_sold_salesman_name].empty:
-                salesman_designation = customer_df[customer_df['Salesman_Name'] == most_sold_salesman_name]['Designation'].iloc[0]
-            else:
-                salesman_designation = 'Designation data not available'
-
-    # 6. Customer Branch
-    customer_branch = 'N/A'
-    if 'Branch' in customer_df.columns and not customer_df.empty:
-        unique_branches = customer_df['Branch'].unique()
-        if len(unique_branches) == 1:
-            customer_branch = unique_branches[0]
-        elif len(unique_branches) > 1:
-            customer_branch = ", ".join(unique_branches)
-        else:
-            customer_branch = 'N/A (Branch data missing)'
-    else:
-        customer_branch = 'N/A (Branch column missing)'
-
-    # 7. Total Order Count
-    total_order_count = 0
-    if 'Order_Id' in customer_df.columns:
-        total_order_count = customer_df['Order_Id'].nunique()
-    else:
-        total_order_count = len(customer_df)
-
-    report = {
-        'Customer Phone': customer_phone,
-        'Customer Name': customer_name,
-        'Customer Branch': customer_branch,
-        'Total Unique Brands Bought': total_brands_bought,
-        'Brands Bought': brands_bought,
-        'Total Order Count': total_order_count,
-        'Top Salesperson': most_sold_salesman_info,
-        'Salesperson Designation': salesman_designation,
-        'Total Unique SKUs Bought': total_unique_skus_bought,
-        'SKUs Bought': skus_bought,
-        'Brand Level Summary': purchase_summary_by_brand,
-        'Brand SKU Level Summary': purchase_summary_by_brand_sku,
-        #'SKUs Grouped by Brand': brand_skus
-    }
-
-    return report
-
-def predict_next_purchases(df_full, customer_phone):
-    customer_df = df_full[df_full['Customer_Phone'] == customer_phone].copy()
-
-    if customer_df.empty:
-        return {
-            'sku_predictions': pd.DataFrame(),
-            'overall_next_brand_prediction': 'N/A',
-        }
-
-    customer_df['Delivered_date'] = pd.to_datetime(customer_df['Delivered_date'])
-    customer_df.sort_values('Delivered_date', inplace=True)
-    customer_df['Month'] = customer_df['Delivered_date'].dt.to_period('M')
-
-    customer_df_sorted = customer_df.sort_values('Delivered_date')
-
-
-    # --- SKU-Level Predictions ---
-    last_purchase_date_sku = customer_df.groupby('SKU_Code')['Delivered_date'].max()
-
-    avg_interval_days = {}
-    for sku, grp in customer_df.groupby('SKU_Code'):
-        dates = grp['Delivered_date'].drop_duplicates().sort_values()
-        if len(dates) > 1:
-            intervals = dates.diff().dt.days.dropna()
-            if not intervals.empty:
-                avg_interval_days[sku] = int(intervals.mean())
-            else:
-                avg_interval_days[sku] = np.nan
-        else:
-            avg_interval_days[sku] = np.nan
-
-    avg_qty_sku = customer_df.groupby(['SKU_Code', 'Month'])['Delivered Qty'].sum().groupby('SKU_Code').mean().round(0)
-    avg_spend_sku = customer_df.groupby(['SKU_Code', 'Month'])['Total_Amount_Spent'].sum().groupby('SKU_Code').mean().round(0)
-    sku_to_brand = customer_df[['SKU_Code', 'Brand']].drop_duplicates().set_index('SKU_Code')['Brand']
-
-
-    sku_predictions_df = pd.DataFrame({
-        'Last Purchase Date': last_purchase_date_sku.dt.date,
-        'Avg Interval Days': pd.Series(avg_interval_days),
-        'Expected Quantity': avg_qty_sku,
-        'Expected Spend': avg_spend_sku
-    }).dropna(subset=['Avg Interval Days'])
-
-    if not sku_predictions_df.empty:
-        sku_predictions_df['Next Purchase Date'] = (
-            pd.to_datetime(sku_predictions_df['Last Purchase Date']) +
-            pd.to_timedelta(sku_predictions_df['Avg Interval Days'], unit='D')
+def load_model_preds_for_agent():
+    try:
+        preds_loaded = pd.read_csv(
+            "purchase_predictions_major.csv",
+            parse_dates=["last_purchase_date", "pred_next_date"],
         )
-        sku_predictions_df = sku_predictions_df.merge(sku_to_brand.rename('Brand'), left_index=True, right_index=True, how='left')
+        # ... (rest of your PRED_DF loading and preprocessing logic) ...
+        preds_loaded = preds_loaded.rename(columns={
+            "pred_next_brand":     "Next Brand Purchase",
+            "pred_next_date":      "Next Purchase Date",
+            "pred_spend":          "Expected Spend",
+            "pred_qty":            "Expected Quantity",
+            "probability":         "Probability"
+        })
+        preds_loaded["Next Purchase Date"] = preds_loaded["Next Purchase Date"].dt.date
+        preds_loaded["Expected Spend"] = preds_loaded["Expected Spend"].round(0).astype(int)
+        preds_loaded["Expected Quantity"] = preds_loaded["Expected Quantity"].round(0).astype(int)
+        preds_loaded["Probability"] = (preds_loaded["Probability"] * 100).round(1)
+        def suggest(p):
+            if p >= 70: return "Follow-up/Alert"
+            if p >= 50: return "Cross Sell"
+            return "Discount"
+        preds_loaded["Suggestion"] = preds_loaded["Probability"].apply(suggest)
+        return preds_loaded
+    except Exception as e:
+        st.warning(f"Error loading prediction data: {e}. Some prediction features may be unavailable.")
+        return pd.DataFrame()
 
-        sku_predictions_df['Likely Purchase Date'] = sku_predictions_df['Next Purchase Date'].dt.strftime('%Y-%m-%d') + ' (' + sku_predictions_df['Next Purchase Date'].dt.day_name() + ')'
+# Load dataframes
+df = load_sales_data_for_agent()
+PRED_DF = load_model_preds_for_agent()
 
-    else:
-        sku_predictions_df['Next Purchase Date'] = pd.NA
-        sku_predictions_df['Brand'] = pd.NA
-        sku_predictions_df['Likely Purchase Date'] = pd.NA
+if df.empty:
+    st.stop() # Stop execution if main data isn't loaded
 
-
-    sku_predictions_df = sku_predictions_df.reset_index().rename(columns={
-        'index': 'SKU Code',
-        'Brand': 'Likely Brand',
-    })
-    sku_predictions_df = sku_predictions_df.sort_values(
-        by='Next Purchase Date', ascending=True
-    ).head(3) # Changed to .head(3)
-
-
-    overall_next_brand_prediction = customer_df_sorted['Brand'].iloc[-1] if not customer_df_sorted.empty else 'N/A'
-
-
-    return {
-        'sku_predictions': sku_predictions_df,
-        'overall_next_brand_prediction': overall_next_brand_prediction,
-    }
-
-# --- Utility function ---
-def calculate_brand_pairs(df):
-    """
-    Calculates the frequency of brand pairs appearing together in orders.
-
-    Args:
-        df (pd.DataFrame): The input DataFrame with sales data, containing columns
-                            'Customer_Phone', 'Delivered_date', and 'Brand'.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing the top brand pairs and their
-                      co-occurrence counts, formatted for display.
-    """
-    df['Order_ID'] = df['Customer_Phone'].astype(str) + "_" + df['Delivered_date'].astype(str)
-    order_brands = df.groupby("Order_ID")["Brand"].apply(set)
-
+# --- Helper functions (from your Colab, needed for tools) ---
+def calculate_brand_sku_pairs_internal(data_frame, type_col='Brand'):
+    # ... (your existing helper function code) ...
+    if 'Order_Id' not in data_frame.columns:
+        data_frame['Order_Id'] = data_frame['Customer_Phone'].astype(str) + "_" + \
+                                 data_frame['Delivered_date'].dt.strftime('%Y%m%d%H%M%S') + '_' + \
+                                 data_frame.groupby(['Customer_Phone', 'Delivered_date']).cumcount().astype(str)
+    order_items = data_frame.groupby("Order_Id")[type_col].apply(set)
     pair_counts = Counter()
-    for items in order_brands:
+    for items in order_items:
         if len(items) > 1:
             for pair in combinations(items, 2):
                 pair_counts[tuple(sorted(pair))] += 1
-
-    pair_df = pd.DataFrame(pair_counts.items(), columns=["Brand_Pair_Tuple", "Count"]).sort_values(by="Count", ascending=False)
-    pair_df['Brand_Pair_Formatted'] = pair_df['Brand_Pair_Tuple'].apply(lambda x: f"{x[0]} & {x[1]}")
+    pair_df = pd.DataFrame(pair_counts.items(), columns=[f"{type_col}_Pair_Tuple", "Count"]).sort_values(by="Count", ascending=False)
+    if type_col == 'SKU_Code':
+        sku_to_brand = data_frame.groupby('SKU_Code')['Brand'].first().to_dict()
+        pair_df[f"{type_col}_Pair_Formatted"] = pair_df[f"{type_col}_Pair_Tuple"].apply(
+            lambda x: f"{x[0]} ({sku_to_brand.get(x[0], 'Unknown')}) & {x[1]} ({sku_to_brand.get(x[1], 'Unknown')})"
+        )
+    else:
+        pair_df[f"{type_col}_Pair_Formatted"] = pair_df[f"{type_col}_Pair_Tuple"].apply(lambda x: f"{x[0]} & {x[1]}")
     return pair_df
 
-# --- Load Data ---
-DF = load_sales_data()
-PRED_DF = load_model_preds()
+# --- Tool Definitions (Copy all your Tool classes here) ---
+# Example:
+class HeadTool(Tool):
+    name = "head"
+    description = "Return the first n rows of the DataFrame df."
+    inputs = {"n": {"type": "integer", "description": "Number of rows to display"}}
+    output_type = "object" # pandas.DataFrame
+    def forward(self, n: int):
+        return df.head(n)
 
-# --- Recommender System Data Preparation (Cached) ---
-@st.cache_data
-def prepare_recommender_data(df_full):
-    # Item-Item Collaborative Filtering (using Redistribution Value)
-    user_item_matrix = df_full.pivot_table(index='Customer_Phone', columns='SKU_Code',
-                                           values='Redistribution Value', aggfunc='sum', fill_value=0)
-    item_similarity = cosine_similarity(user_item_matrix.T)
-    item_similarity_df = pd.DataFrame(item_similarity,
-                                      index=user_item_matrix.columns,
-                                      columns=user_item_matrix.columns)
+# ... (Copy all your other Tool classes: TailTool, DescribeTool, InfoTool, HistogramTool,
+#      ScatterPlotTool, CorrelationTool, PivotTableTool, FilterRowsTool, GroupByAggregateTool,
+#      SortTool, TopNTool, CrosstabTool, LinRegEvalTool, PredictLinearTool, RFClassifyTool,
+#      FinalAnswerTool, InsightsTool, PlotBarChartTool, PlotLineChartTool,
+#      PlotDualAxisLineChartTool, BrandSKUPairAnalysisTool, CustomerProfileReportTool,
+#      HeuristicNextPurchasePredictionTool, SKURecommenderTool) ...
 
-    # Content-Based Filtering (using Brand and Branch)
-    # Ensure 'Branch' column exists and handle potential missing values
-    item_attributes_cols = ['SKU_Code', 'Brand']
-    if 'Branch' in df_full.columns:
-        item_attributes_cols.append('Branch')
-
-    item_attributes = df_full[item_attributes_cols].drop_duplicates(subset=['SKU_Code']).set_index('SKU_Code')
-
-    # Handle potential non-string types in 'Brand' or 'Branch' before OneHotEncoding
-    for col in ['Brand', 'Branch']:
-        if col in item_attributes.columns:
-            item_attributes[col] = item_attributes[col].astype(str).fillna('Unknown')
-
-    encoder = OneHotEncoder(handle_unknown='ignore') # handle_unknown='ignore' for new categories
-    item_features_encoded = encoder.fit_transform(item_attributes)
-    content_similarity = cosine_similarity(item_features_encoded)
-    content_similarity_df = pd.DataFrame(content_similarity,
-                                          index=item_attributes.index,
-                                          columns=item_attributes.index)
-
-    # Hybrid Similarity
-    common_skus = item_similarity_df.index.intersection(content_similarity_df.index)
-    if common_skus.empty:
-        st.warning("No common SKUs found between collaborative and content-based models. Hybrid recommendations may not be possible.")
-        return None, None, None # Return None if no common SKUs
-
-    filtered_item_similarity = item_similarity_df.loc[common_skus, common_skus]
-    filtered_content_similarity = content_similarity_df.loc[common_skus, common_skus]
-    hybrid_similarity = (filtered_item_similarity + filtered_content_similarity) / 2
-
-    # SKU to Brand mapping for recommendations display
-    sku_brand_map = df_full[['SKU_Code', 'Brand']].drop_duplicates(subset='SKU_Code').set_index('SKU_Code')
-
-    return user_item_matrix, hybrid_similarity, sku_brand_map
-
-# --- Recommendation Functions ---
-def recommend_skus_brands(customer_phone, user_item_matrix, hybrid_similarity, sku_brand_map, top_n=5):
-    if customer_phone not in user_item_matrix.index:
-        return pd.DataFrame() # Return empty if customer not in matrix
-
-    purchased_skus = user_item_matrix.loc[customer_phone]
-    purchased_skus = purchased_skus[purchased_skus > 0].index.tolist()
-
-    if not purchased_skus:
-        return pd.DataFrame() # Return empty if customer hasn't purchased anything
-
-    # Filter hybrid_similarity to only include SKUs that are in the matrix
-    valid_purchased_skus = [sku for sku in purchased_skus if sku in hybrid_similarity.columns]
-    if not valid_purchased_skus:
-        return pd.DataFrame() # No valid purchased SKUs for similarity calculation
-
-    # Calculate scores for all SKUs based on purchased_skus
-    sku_scores = hybrid_similarity[valid_purchased_skus].mean(axis=1)
-
-    # Remove already purchased SKUs from recommendations
-    sku_scores = sku_scores.drop(index=[s for s in purchased_skus if s in sku_scores.index], errors='ignore')
-
-    if sku_scores.empty:
-        return pd.DataFrame() # No recommendations if all are purchased or no scores
-
-    top_skus = sku_scores.sort_values(ascending=False).head(top_n)
-
-    # Ensure recommended SKUs exist in the sku_brand_map
-    recommendations = sku_brand_map.loc[top_skus.index.intersection(sku_brand_map.index)].copy()
-    recommendations['Similarity_Score'] = top_skus.loc[recommendations.index].values
-    return recommendations.reset_index()
-
-#def combined_report_recommender(customer_phone, user_item_matrix, hybrid_similarity, df_full, sku_brand_map, top_n=5):
-    # Past Purchases
-    #past_purchases = df_full[df_full['Customer_Phone'] == customer_phone][['SKU_Code', 'Brand']].drop_duplicates()
-    #past_purchases['Type'] = 'Previously Purchased'
-    #past_purchases['Similarity_Score'] = np.nan # No score for past purchases
-
-    # Recommendations
-    #recommendations = recommend_skus_brands(customer_phone, user_item_matrix, hybrid_similarity, sku_brand_map, top_n)
-    #recommendations['Type'] = 'Recommended'
-
-    # Combine and order columns
-    #combined = pd.concat([past_purchases, recommendations[['SKU_Code', 'Brand', 'Similarity_Score', 'Type']]], ignore_index=True)
-    #combined = combined[['Type', 'Brand', 'SKU_Code', 'Similarity_Score']] # Ensure consistent column order
-    #return combined
-def combined_report_recommender(customer_phone, user_item_matrix, hybrid_similarity, df_full, sku_brand_map, top_n=5):
-    # Past Purchases
-    past_purchases = df_full[df_full['Customer_Phone'] == customer_phone][['SKU_Code', 'Brand']].drop_duplicates()
-    # No 'Type' or 'Similarity_Score' needed for this table
-
-    # Recommendations
-    recommendations = recommend_skus_brands(customer_phone, user_item_matrix, hybrid_similarity, sku_brand_map, top_n)
-    # The 'Type' column can be added for internal filtering if needed, but not for display now.
-    # The 'Similarity_Score' is already in 'recommendations' DataFrame.
-
-    return past_purchases, recommendations # Return two separate DataFrames
-# --- UI Setup ---
-logo = Image.open("logo.png")
-st.sidebar.image(logo, width=150)
-st.sidebar.title("SALES DASHBOARD 🚀")
-section = st.sidebar.radio(
-    "Sections:",
-    [
-        "📊 EDA Overview", "📉 Drop Detection", "👤 Customer Profiling",
-        "🧑‍💻 Customer Profilling (Model Predictions)", "🔁 Cross-Selling", 
-        "🔗 Brand Correlation", "🤖 Recommender"
-    ]
-)
-st.title("📊 Sales Intelligence Dashboard")
-
-if section == "📊 EDA Overview":
-    st.subheader("Exploratory Data Analysis")
-    tabs = st.tabs([
-        "Brands Overview",
-        "SKUs Overview",
-        "Brand Deep Dive by SKU",
-        "Customers Overview",
-        "Overall Trends"
-    ])
-
-    # --- Brands Overview ---
-    with tabs[0]:
-        st.subheader("Brands Analysis")
-        data_rev_brand = DF.groupby("Brand")["Redistribution Value"].sum().nlargest(10)
-        st.markdown("**Top 10 Brands by Total Revenue**")
-        st.bar_chart(data_rev_brand)
-        data_qty_brand = DF.groupby("Brand")["Delivered Qty"].sum().nlargest(10)
-        st.markdown("**Top 10 Brands by Quantity Sold**")
-        st.bar_chart(data_qty_brand)
-        share_brand = DF.groupby("Brand")["Delivered Qty"].sum() / DF["Delivered Qty"].sum() * 100
-        st.markdown("**Brands by Share of Total Quantity (Top 10)**")
-        st.bar_chart(share_brand.nlargest(10))
-        df_brand_trend = DF.copy()
-        df_brand_trend["MonthTS"] = df_brand_trend["Month"].dt.to_timestamp()
-        top10_brands = df_brand_trend.groupby("Brand")["Delivered Qty"].sum().nlargest(10).index
-        trend_brand = df_brand_trend[df_brand_trend["Brand"].isin(top10_brands)]
-        trend_brand = trend_brand.groupby(["MonthTS", "Brand"])["Delivered Qty"].sum().unstack()
-        st.markdown("**Monthly Quantity Trend for Top Brands**")
-        st.line_chart(trend_brand)
-        st.markdown("**Brand Pair Analysis (Top 5)**")
-        df_brand_pairs = calculate_brand_pairs(DF).head(5)
-        st.bar_chart(df_brand_pairs.set_index('Brand_Pair_Formatted')['Count'])
-        brand_var = DF.groupby("Customer_Phone")["Brand"].nunique()
-        dist_brand_var = brand_var.value_counts().sort_index().reset_index()
-        dist_brand_var.columns = ['Unique Brands Purchased', 'Number of Customers']
-        chart_brand_var = alt.Chart(dist_brand_var).mark_bar().encode(
-            x=alt.X('Unique Brands Purchased:O', title='Unique Brands Purchased'),
-            y=alt.Y('Number of Customers:Q', title='Number of Customers'),
-            tooltip=['Unique Brands Purchased', 'Number of Customers']
-        ).properties(title="Distribution of Brand Variety")
-        st.altair_chart(chart_brand_var, use_container_width=True)
-
-    # --- SKUs Overview ---
-    with tabs[1]:
-        st.subheader("SKUs Analysis")
-        data_rev_sku = DF.groupby("SKU_Code")["Redistribution Value"].sum().nlargest(10)
-        st.markdown("**Top 10 SKUs by Total Revenue**")
-        st.bar_chart(data_rev_sku)
-        data_qty_sku = DF.groupby("SKU_Code")["Delivered Qty"].sum().nlargest(10)
-        st.markdown("**Top 10 SKUs by Quantity Sold**")
-        st.bar_chart(data_qty_sku)
-        share_sku = DF.groupby("SKU_Code")["Delivered Qty"].sum() / DF["Delivered Qty"].sum() * 100
-        st.markdown("**SKUs by Share of Total Quantity (Top 10)**")
-        st.bar_chart(share_sku.nlargest(10))
-        df_sku_trend = DF.copy()
-        df_sku_trend["MonthTS"] = df_sku_trend["Month"].dt.to_timestamp()
-        top10_skus = df_sku_trend.groupby("SKU_Code")["Delivered Qty"].sum().nlargest(10).index
-        trend_sku = df_sku_trend[df_sku_trend["SKU_Code"].isin(top10_skus)]
-        trend_sku = trend_sku.groupby(["MonthTS", "SKU_Code"])["Delivered Qty"].sum().unstack()
-        st.markdown("**Monthly Quantity Trend for Top SKUs**")
-        st.line_chart(trend_sku)
-        st.markdown("**Top 10 Most Frequently Bought SKU Pairs**")
-        cnt_sku_pairs = Counter()
-        df_sku_pairs = DF.copy()
-        df_sku_pairs["Order_ID"] = df_sku_pairs["Customer_Phone"].astype(str) + "_" + df_sku_pairs["Delivered_date"].astype(str)
-        for s in df_sku_pairs.groupby("Order_ID")["SKU_Code"].apply(set):
-            if len(s) > 1:
-                for pair in combinations(sorted(s), 2): cnt_sku_pairs[pair] += 1
-        df_sku_pairs_top10 = pd.Series(cnt_sku_pairs).nlargest(10).to_frame(name="Count")
-        df_sku_pairs_top10.index = df_sku_pairs_top10.index.map(lambda t: f"{t[0]} & {t[1]}")
-        st.bar_chart(df_sku_pairs_top10)
-        sku_var = DF.groupby("Customer_Phone")["SKU_Code"].nunique()
-        dist_sku_var = sku_var.value_counts().sort_index()
-        st.markdown("**Distribution of SKU Variety**")
-        st.bar_chart(dist_sku_var)
-
-    # --- Brand Deep Dive by SKU ---
-    with tabs[2]:
-        st.subheader("Brand Deep Dive by SKU")
-        top_brands = DF.groupby("Brand")["Redistribution Value"].sum().nlargest(5).index.tolist()
-        selected_brand_deep_dive = st.selectbox("Select a Brand for Deeper SKU Analysis:", top_brands)
-        if selected_brand_deep_dive:
-            brand_df = DF[DF['Brand'] == selected_brand_deep_dive]
-
-            st.subheader(f"Brand Co-Purchases with {selected_brand_deep_dive}")
-            df_pairs = calculate_brand_pairs(DF)
-
-            # Filter pairs containing the selected brand
-            filtered_pairs = df_pairs[
-                df_pairs['Brand_Pair_Tuple'].apply(lambda x: selected_brand_deep_dive in x)
-            ].sort_values(by='Count', ascending=False)
-
-            if not filtered_pairs.empty:
-                chart = alt.Chart(filtered_pairs).mark_bar().encode(
-                    x=alt.X('Brand_Pair_Formatted', title='Co-Purchased Brand', sort='-y'),
-                    y=alt.Y('Count', title='Frequency'),
-                    color=alt.Color('Count', legend=alt.Legend(title='Frequency')),
-                    tooltip=['Brand_Pair_Formatted', 'Count']
-                ).properties(
-                    width=600,
-                    height=500,
-                    title=f"Brands Purchased Alongside {selected_brand_deep_dive}"
-                )
-                text = chart.mark_text(
-                    align='center',
-                    baseline='bottom',
-                    dy=-5
-                ).encode(
-                    text='Count',
-                    color=alt.value('black')
-                )
-                final_chart = chart + text
-                st.altair_chart(final_chart, use_container_width=True)
-            else:
-                st.write(f"No co-purchases found for {selected_brand_deep_dive} with any other brand.")
-
-            st.markdown(f"**Top 10 SKUs by Revenue in {selected_brand_deep_dive}**")
-            top_skus_rev = brand_df.groupby("SKU_Code")["Redistribution Value"].sum().nlargest(10)
-            st.bar_chart(top_skus_rev)
-
-            st.markdown(f"**Top 10 SKUs by Quantity Sold in {selected_brand_deep_dive}**")
-            top_skus_qty = brand_df.groupby("SKU_Code")["Delivered Qty"].sum().nlargest(10)
-            st.bar_chart(top_skus_qty)
-
-            df_sku_trend_brand = brand_df.copy()
-            df_sku_trend_brand["MonthTS"] = df_sku_trend_brand["Month"].dt.to_timestamp()
-            top5_skus_in_brand = df_sku_trend_brand.groupby("SKU_Code")["Delivered Qty"].sum().nlargest(5).index
-            trend_sku_brand = df_sku_trend_brand[df_sku_trend_brand["SKU_Code"].isin(top5_skus_in_brand)]
-            trend_sku_brand = trend_sku_brand.groupby(["MonthTS", "SKU_Code"])["Delivered Qty"].sum().unstack()
-            st.markdown(f"**Monthly Quantity Trend for Top 5 SKUs in {selected_brand_deep_dive}**")
-            st.line_chart(trend_sku_brand)
-
-    # --- Customers Overview ---
-    with tabs[3]:
-        st.subheader("Customers Analysis")
-        st.markdown("**Top 10 Customers by Total Spending**")
-        df_chart_cust_rev = DF.copy()
-        df_chart_cust_rev['Customer_Info'] = df_chart_cust_rev['Customer_Name'] + ' (0' + df_chart_cust_rev['Customer_Phone'].astype(str) + ')'
-        customer_ltv_with_name = (
-            df_chart_cust_rev.groupby("Customer_Info")["Redistribution Value"]
-            .sum()
-            .sort_values(ascending=False)
-            .head(10)
-        )
-        chart_cust_rev = alt.Chart(customer_ltv_with_name.reset_index()).mark_bar().encode(
-            x=alt.X('Redistribution Value', title='Total Redistribution Value', axis=alt.Axis(format=',.2s')),
-            y=alt.Y('Customer_Info', sort='-x', title='Customer'),
-            tooltip=['Customer_Info', 'Redistribution Value']
-        ).properties(height=500)
-        st.altair_chart(chart_cust_rev, use_container_width=True)
-
-        st.markdown("**Top 10 Buyers by Quantity Purchased**")
-        df_chart_cust_qty = DF.copy()
-        df_chart_cust_qty['Customer_Info'] = df_chart_cust_qty['Customer_Name'] + ' (0' + df_chart_cust_qty['Customer_Phone'].astype(str) + ')'
-        top_buyers_qty_with_name = (
-            df_chart_cust_qty.groupby("Customer_Info")["Delivered Qty"]
-            .sum()
-            .sort_values(ascending=False)
-            .head(10)
-        )
-        chart_cust_qty = alt.Chart(top_buyers_qty_with_name.reset_index()).mark_bar().encode(
-            x=alt.X('Delivered Qty', title='Total Quantity', axis=alt.Axis(format=',.2s')),
-            y=alt.Y('Customer_Info', sort='-x', title='Customer'),
-            color=alt.Color('Delivered Qty'),
-            tooltip=['Customer_Info', 'Delivered Qty']
-        ).properties(height=500)
-        st.altair_chart(chart_cust_qty, use_container_width=True)
-
-        st.markdown("**Buyer Type (Repeat vs. One-Time Buyers)**")
-        counts_cust_type = DF.groupby("Customer_Phone")["Delivered_date"].nunique()
-        summary_cust_type = (counts_cust_type == 1).map({True: "One-time", False: "Repeat"}).value_counts()
-        st.bar_chart(summary_cust_type)
-
-        st.markdown("**Monthly Purchase Value Trend for Top 5 Buyers**")
-        df_cust_trend = DF.copy()
-        df_cust_trend["MonthTS"] = df_cust_trend["Month"].dt.to_timestamp()
-        top5_cust = df_cust_trend.groupby("Customer_Phone")["Redistribution Value"].sum().nlargest(5).index
-        trend_cust = df_cust_trend[df_cust_trend["Customer_Phone"].isin(top5_cust)]
-        trend_cust = trend_cust.groupby(["MonthTS", "Customer_Phone"])["Redistribution Value"].sum().unstack()
-        st.line_chart(trend_cust)
-
-        st.markdown("**Buyer Analysis (Top vs. Bottom in Latest Month)**")
-        latest_month = DF['Month'].max()
-        buyer_performance = DF[DF['Month'] == latest_month].groupby('Customer_Phone')['Redistribution Value'].sum()
-        col_top_bottom = st.columns(2)
-        with col_top_bottom[0]:
-            st.write("Top 5 Buyers (Latest Month)")
-            st.bar_chart(buyer_performance.nlargest(5))
-        with col_top_bottom[1]:
-            st.write("Bottom 5 Buyers (Latest Month)")
-            st.bar_chart(buyer_performance.nsmallest(5))
-
-    # --- Overall Trends ---
-    with tabs[4]:
-        st.subheader("Overall Sales Trends")
-        monthly_summary_overall = DF.groupby("Month")[["Delivered Qty", "Redistribution Value"]].sum().reset_index()
-        monthly_summary_overall["MonthTS"] = monthly_summary_overall["Month"].dt.to_timestamp()
-        qty_overall = alt.Chart(monthly_summary_overall).mark_line(point=True).encode(
-            x=alt.X("MonthTS:T", title="Month"),
-            y=alt.Y("Delivered Qty:Q", axis=alt.Axis(title="Total Quantity", titleColor="royalblue")),
-            color=alt.value("royalblue")
-        )
-        rev_overall = alt.Chart(monthly_summary_overall).mark_line(point=True).encode(
-            x="MonthTS:T",
-            y=alt.Y("Redistribution Value:Q", axis=alt.Axis(title="Total Revenue", titleColor="orange")),
-            color=alt.value("orange")
-        )
-        dual_overall = alt.layer(qty_overall, rev_overall).resolve_scale(y="independent").properties(height=400)
-        st.altair_chart(dual_overall, use_container_width=True)
-
-        avg_order_value = DF.groupby("Month")["Redistribution Value"].mean().reset_index()
-        avg_order_value["MonthTS"] = avg_order_value["Month"].dt.to_timestamp()
-        chart_aov = alt.Chart(avg_order_value).mark_line(point=True).encode(
-            x=alt.X("MonthTS:T", title="Month"),
-            y=alt.Y("Redistribution Value:Q", title="Average Order Value")
-        ).properties(title="Average Order Value Trend")
-        st.altair_chart(chart_aov, use_container_width=True)
-
-        ltv_top10 = DF.groupby("Customer_Phone")["Redistribution Value"].sum().nlargest(10).reset_index()
-        ltv_top10.columns = ['Customer Phone', 'Total Spend']
-        st.markdown("**Top 10 Customers by Lifetime Value (Total Spend)**")
-        st.bar_chart(ltv_top10.set_index('Customer Phone')['Total Spend'])
-elif section == "📉 Drop Detection":
-    st.subheader("Brand-Level Month-over-Month (MoM) Revenue Drop Analysis")
-    st.markdown(
-        "This section analyzes the month-over-month percentage change in revenue for each brand to identify significant drops."
+# Ensure the SKURecommenderTool and its dependencies are correctly defined.
+# The SKURecommenderTool's forward method will now use the globally loaded `df` and `PRED_DF`
+# and the `calculate_brand_sku_pairs_internal` helper.
+class SKURecommenderTool(Tool):
+    name = "sku_recommender"
+    description = (
+        "Generates personalized SKU recommendations for a customer based on a hybrid model. "
+        "Returns a string summary of previously purchased and recommended SKUs."
     )
-    st.markdown(
-        "**NB:**"
-        "\n- Values in the table represent the MoM percentage change in revenue. \n"
-        "- Upward trend is indicated by ⬆️, and downward trend by🔻. \n"
-        "- Previous month's revenue is shown in parentheses to provide context."
-    )
+    inputs = {
+        "customer_phone": {"type": "string", "description": "The phone number of the customer to recommend for."},
+        "top_n": {"type": "integer", "description": "Number of top recommendations to return (default 5).", "required": False, "nullable": True},
+    }
+    output_type = "string"
 
-    # --- 1. Data Preparation ---
-    try:
-        brand_month_revenue = DF.groupby(['Brand', 'Month'])['Redistribution Value'].sum().unstack(fill_value=0)
-    except KeyError as e:
-        st.error(f"KeyError in data processing: {e}. Please ensure the 'Brand', 'Month', and 'Redistribution Value' columns are present in your data.")
-        st.stop()
+    def forward(self, customer_phone: str, top_n: int = 5):
+        try:
+            user_item_matrix = df.pivot_table(index='Customer_Phone', columns='SKU_Code',
+                                               values='Redistribution Value', aggfunc='sum', fill_value=0)
+            item_similarity = cosine_similarity(user_item_matrix.T)
+            item_similarity_df = pd.DataFrame(item_similarity,
+                                              index=user_item_matrix.columns,
+                                              columns=user_item_matrix.columns)
 
-    # Calculate Month-over-Month (MoM) percentage change
-    mom_change = brand_month_revenue.pct_change(axis=1) * 100
+            item_attributes_cols = ['SKU_Code', 'Brand']
+            if 'Branch' in df.columns:
+                item_attributes_cols.append('Branch')
 
-    # --- 2. Create Display DataFrame ---
-    display_df = pd.DataFrame(index=brand_month_revenue.index)
+            item_attributes = df[item_attributes_cols].drop_duplicates(subset=['SKU_Code']).set_index('SKU_Code')
+            for col in ['Brand', 'Branch']:
+                if col in item_attributes.columns:
+                    item_attributes[col] = item_attributes[col].astype(str).fillna('Unknown')
 
-    # Iterate through each month to format the display
-    for i, col in enumerate(brand_month_revenue.columns):
-        prev_month_col = brand_month_revenue.columns[i-1] if i > 0 else None
-        mom_val = mom_change[col]
-        prev_revenue = brand_month_revenue[prev_month_col] if prev_month_col is not None else pd.Series(index=brand_month_revenue.index)
+            encoder = OneHotEncoder(handle_unknown='ignore')
+            item_features_encoded = encoder.fit_transform(item_attributes)
+            content_similarity = cosine_similarity(item_features_encoded)
+            content_similarity_df = pd.DataFrame(content_similarity,
+                                                  index=item_attributes.index,
+                                                  columns=item_attributes.index)
 
-        formatted_values = []
-        for brand in brand_month_revenue.index:
-            m = mom_val.get(brand)
-            p = prev_revenue.get(brand)
+            common_skus = item_similarity_df.index.intersection(content_similarity_df.index)
+            if common_skus.empty:
+                return "Recommender system could not be initialized: No common SKUs found between collaborative and content-based models."
 
-            mom_str = f"{m:.1f}%" if pd.notna(m) else "No Data"
-            prev_str = f"{int(p):,}" if pd.notna(p) else "No Data"
-            arrow = ""
-            if pd.notna(m):
-                if m > 0:
-                    arrow = "⬆️"
-                elif m < 0:
-                    arrow = "🔻"
-            formatted_values.append(f"{mom_str}{arrow} ({prev_str})")
+            filtered_item_similarity = item_similarity_df.loc[common_skus, common_skus]
+            filtered_content_similarity = content_similarity_df.loc[common_skus, common_skus]
+            hybrid_similarity = (filtered_item_similarity + filtered_content_similarity) / 2
 
-        display_df[f"{col}\n(Prev. Month\nRevenue)"] = formatted_values
+            sku_brand_map = df[['SKU_Code', 'Brand']].drop_duplicates(subset='SKU_Code').set_index('SKU_Code')
 
-    st.dataframe(display_df, use_container_width=True)
+        except Exception as e:
+            return f"Error preparing recommender data: {e}"
 
-    # --- 3. Identify and Display Brands with Negative MoM Change ---
-    negative_mom_changes = mom_change[mom_change < 0].stack().reset_index(name='MoM Change')
-    if not negative_mom_changes.empty:
-        st.subheader("Brands with Negative Month-over-Month Revenue Change")
-        st.markdown(
-            "The following table highlights brands that experienced a decrease in revenue compared to the previous month."
-        )
-        # Melt revenue data for merging
-        melted_revenue = brand_month_revenue.melt(ignore_index=False, var_name='Month', value_name='Previous Month Revenue').reset_index()
+        if customer_phone not in user_item_matrix.index:
+            return f"Customer {customer_phone} not found in the purchase history for recommendations."
 
-        # Merge based on Brand and Month
-        negative_brands_info = pd.merge(negative_mom_changes, melted_revenue, on=['Brand', 'Month'], how='left')
+        purchased_skus = user_item_matrix.loc[customer_phone]
+        purchased_skus = purchased_skus[purchased_skus > 0].index.tolist()
 
-        negative_brands_info['MoM Change Formatted'] = negative_brands_info['MoM Change'].apply(lambda x: f"{x:.1f}%🔻" if pd.notna(x) else "No Data")
-        negative_brands_info['Previous Month Revenue Formatted'] = negative_brands_info['Previous Month Revenue'].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "No Data")
+        if not purchased_skus:
+            return f"Customer {customer_phone} has no recorded purchases. Cannot generate recommendations."
 
-        display_negative = negative_brands_info[['Brand', 'Month', 'MoM Change Formatted', 'Previous Month Revenue Formatted']]
-        display_negative.columns = ['Brand', 'Month', 'MoM Change', 'Previous Month Revenue']
-        st.dataframe(display_negative, use_container_width=True, column_config={
-            "MoM Change": st.column_config.Column(
-                "MoM Change",
-                help="Month-over-Month percentage change in revenue.",
-            ),
-            "Previous Month Revenue": st.column_config.Column(
-                "Previous Month Revenue",
-                help="Revenue in the previous month.",
-            ),
-        })
-    else:
-        st.info("No brands experienced a month-over-month revenue decrease in the selected period.")
+        valid_purchased_skus = [sku for sku in purchased_skus if sku in hybrid_similarity.columns]
+        if not valid_purchased_skus:
+            return "No valid purchased SKUs for similarity calculation. Cannot generate recommendations."
 
-elif section == "👤 Customer Profiling":
-    st.subheader("Customer Purchase Deep-Dive")
-    cust = st.selectbox("Select Customer Phone:", sorted(DF['Customer_Phone'].unique()))
-    if cust:
-        report = analyze_customer_purchases_extended(DF, cust)
-        heuristic_predictions = predict_next_purchases(DF, cust) # Call the updated function
+        sku_scores = hybrid_similarity[valid_purchased_skus].mean(axis=1)
+        sku_scores = sku_scores.drop(index=[s for s in purchased_skus if s in sku_scores.index], errors='ignore')
 
-        if isinstance(report, str):
-            st.write(report)
+        if sku_scores.empty:
+            return "No new recommendations could be generated for this customer."
+
+        top_skus = sku_scores.sort_values(ascending=False).head(top_n)
+
+        recommendations_df = sku_brand_map.loc[top_skus.index.intersection(sku_brand_map.index)].copy()
+        recommendations_df['Similarity_Score'] = top_skus.loc[recommendations_df.index].values
+        recommendations_df = recommendations_df.reset_index()
+
+        report_parts = [f"### SKU Recommendations for Customer {customer_phone}:"]
+
+        report_parts.append("\n**Previously Purchased SKUs:**")
+        if purchased_skus:
+            past_purchases_info = df[df['Customer_Phone'].astype(str) == customer_phone][['SKU_Code', 'Brand']].drop_duplicates()
+            for _, row in past_purchases_info.iterrows():
+                report_parts.append(f"- {row['SKU_Code']} ({row['Brand']})")
         else:
-            st.markdown(f"**Customer Name:** {report['Customer Name']}")
-            st.markdown(f"**Customer Branch:** {report['Customer Branch']}")
-            st.markdown(f"**Total Unique Brands Bought:** {report['Total Unique Brands Bought']}")
-            st.markdown(f"**Brands Bought:** {', '.join(report['Brands Bought'])}")
-            st.markdown(f"**Total Order Count:** {report['Total Order Count']}")
-            st.markdown(f"**Top Salesperson:** {report['Top Salesperson']}")
-            st.markdown(f"**Salesperson Designation:** {report['Salesperson Designation']}")
-            st.markdown(f"**Total Unique SKUs Bought:** {report['Total Unique SKUs Bought']}")
-            st.markdown(f"**SKUs Bought:** {', '.join(report['SKUs Bought'])}")
+            report_parts.append("No past purchase data found for this customer.")
 
-            st.subheader("Brand Level Purchase Summary")
-            brand_summary_df = pd.DataFrame.from_dict(report['Brand Level Summary'], orient='index')
-            brand_summary_df = brand_summary_df.rename_axis('Brand').reset_index()
-            st.dataframe(brand_summary_df, use_container_width=True)
+        report_parts.append("\n**Recommended SKUs:**")
+        if not recommendations_df.empty:
+            for _, row in recommendations_df.iterrows():
+                report_parts.append(f"- {row['SKU_Code']} ({row['Brand']}) - Similarity: {row['Similarity_Score']:.4f}")
+            report_parts.append("\n*A higher 'Similarity Score' indicates a stronger recommendation.*")
+        else:
+            report_parts.append("No new recommendations could be generated for this customer.")
 
-            st.subheader("Brand SKU Level Purchase Summary")
-            for brand, sku_summary in report['Brand SKU Level Summary'].items():
-                st.markdown(f"**Brand:** {brand}")
-                sku_summary_df = pd.DataFrame.from_dict(sku_summary, orient='index')
-                sku_summary_df = sku_summary_df.rename_axis('SKU Code').reset_index()
-                st.dataframe(sku_summary_df, use_container_width=True)
+        return "\n".join(report_parts)
 
-            # --- IMPROVED NEXT-PURCHASE PREDICTIONS DISPLAY ---
-            st.subheader("Next Purchase Predictions (Heuristic)")
-            st.markdown(f"**Overall Most Recently Bought Brand (for context):** {heuristic_predictions['overall_next_brand_prediction']}")
 
-            st.markdown("---") # Separator for clarity
+# --- Instantiate all tools and create the CodeAgent ---
+# (As defined in your Colab notebook, ensure all tools are instantiated)
+tools = [
+    HeadTool(), TailTool(), InfoTool(), DescribeTool(), HistogramTool(), ScatterPlotTool(),
+    CorrelationTool(), PivotTableTool(), FilterRowsTool(), GroupByAggregateTool(), SortTool(),
+    TopNTool(), CrosstabTool(), LinRegEvalTool(), PredictLinearTool(), RFClassifyTool(),
+    FinalAnswerTool(), InsightsTool(),
+    PlotBarChartTool(), PlotLineChartTool(), PlotDualAxisLineChartTool(),
+    BrandSKUPairAnalysisTool(), CustomerProfileReportTool(),
+    HeuristicNextPurchasePredictionTool(), SKURecommenderTool(),
+]
 
-            st.markdown("**Predicted Next Purchases (SKU Level with Brand and Date/Day):**")
-            if not heuristic_predictions['sku_predictions'].empty:
-                # Display the combined SKU prediction table
-                st.dataframe(
-                    heuristic_predictions['sku_predictions'][[
-                        'Likely Brand', 'SKU Code', 'Likely Purchase Date', 'Expected Quantity', 'Expected Spend'
-                    ]],
-                    use_container_width=True
-                )
-            else:
-                st.info("Not enough historical data to provide detailed SKU purchase predictions for this customer.")
 
-elif section == "🧑‍💻 Customer Profilling (Model Predictions)":
-    st.subheader("Next-Purchase Model Predictions")
-    cust = st.selectbox("Customer:", sorted(PRED_DF['Customer_Phone'].unique()))
-    if cust:
-        p = PRED_DF[PRED_DF['Customer_Phone'] == cust].drop(columns=['Customer_Phone']).set_index('SKU_Code')
-        p['Probability'] = p['Probability'].map(lambda x: f"{x:.1f}%")
-        st.dataframe(p, use_container_width=True)
+# Initialize LiteLLMModel
+# Use st.secrets for API key in Streamlit Cloud
+# For local testing, ensure OPENROUTER_API_KEY is an environment variable
+openrouter_api_key = st.secrets.get("OPENROUTER_API_KEY")
+if not openrouter_api_key:
+    st.error("OpenRouter API key not found. Please set it in Streamlit secrets or as an environment variable.")
+    st.stop()
 
-elif section == "🔁 Cross-Selling":
-    st.subheader("Brand Switching Patterns (Top 3)")
-    lp = DF.groupby(['Customer_Phone','Brand'])['Month'].max().reset_index()
-    drop = lp[lp['Month'] < lp['Month'].max()]
-    sw = DF.merge(drop, on='Customer_Phone', suffixes=('','_dropped'))
-    sw = sw[(sw['Month'] > sw['Month_dropped']) & (sw['Brand'] != sw['Brand_dropped'])]
-    patterns = sw.groupby(['Brand_dropped','Brand']).size().reset_index(name='Count')
-    top3 = patterns.sort_values(['Brand_dropped','Count'], ascending=[True,False]).groupby('Brand_dropped').head(3)
-    st.dataframe(top3, use_container_width=True)
+model = LiteLLMModel(
+    model_id="openrouter/meta-llama/llama-4-maverick",
+    temperature=0.2,
+    api_key=openrouter_api_key,
+    additional_kwargs={
+        "custom_llm_provider": "openrouter",
+        "max_tokens": 1024,
+        "max_completion_tokens": 1024,
+    },
+)
 
-elif section == "🔗 Brand Correlation":
-    st.subheader("Brand Correlation Matrix")
-    mat = DF.groupby(['Customer_Phone','Brand'])['Order_Id'].count().unstack(fill_value=0)
-    st.dataframe(mat.corr().round(2), use_container_width=True)
+agent = CodeAgent(
+    tools=tools,
+    model=model,
+    description="""
+You are a Grandmaster Data Science assistant. Two pandas DataFrames are loaded:
+- `df`: The main sales data, containing columns like 'Brand', 'SKU_Code', 'Customer_Name', 'Customer_Phone', 'Delivered_date', 'Redistribution Value', 'Delivered Qty', 'Order_Id', 'Month', 'Total_Amount_Spent'.
+- `PRED_DF`: Contains model-based purchase predictions, with columns like 'Customer_Phone', 'Next Brand Purchase', 'Next Purchase Date', 'Expected Spend', 'Expected Quantity', 'Probability', 'Suggestion'.
 
-elif section == "🤖 Recommender":
-    st.subheader("Hybrid SKU Recommendations")
-    st.markdown(
-        "This section provides personalized SKU recommendations based on a hybrid approach, "
-        "combining your past purchases with similar customers' behavior and item attributes."
-    )
+You have access to these tools:
+1) head(n) – Show first n rows of `df`.
+2) tail(n) – Show last n rows of `df`.
+3) info() – Return `df.info()` as string.
+4) describe(column) – Summary stats for a column or all of `df`.
+5) histogram(column, bins) – Plot histogram of a numeric column in `df`.
+6) scatter_plot(column_x, column_y) – Plot scatter of two numeric columns in `df`.
+7) correlation(method='pearson') – Compute correlation matrix of numeric columns in `df`.
+8) pivot_table(index, columns, values, aggfunc) – Create pivot table from `df`.
+9) filter_rows(column, operator, value) – Filter `df` rows. Returns the filtered DataFrame.
+10) groupby_agg(group_columns, metric_column, aggfunc) – Group `df` and aggregate. Returns the aggregated DataFrame.
+11) sort(column, ascending) – Sort `df` by column. Returns the sorted DataFrame.
+12) top_n(metric_column, n, group_columns=None, ascending=False) – Top/Bottom n by metric (optional grouping, specify `ascending=True` for bottom N) from `df`. Returns the result DataFrame.
+13) crosstab(row, column, aggfunc=None, values=None) – Crosstab between categories in `df`.
+14) linreg_eval(feature_columns, target_column, test_size=0.2) – Train/test + LinearRegression on `df`, return R².
+15) predict_linear(feature_columns, target_column, new_data) – Fit LinearRegression on `df`, predict new row.
+16) rf_classify(feature_columns, target_column, test_size=0.2, n_estimators=100) – RF classification on `df`, return report.
+17) final_answer(text) – Return a direct final answer to the user as string.
+18) insights() – Compute overall sales-dataset insights and actionable recommendations. No arguments.
 
-    # Prepare recommender data (cached)
-    user_item_matrix, hybrid_similarity, sku_brand_map = prepare_recommender_data(DF)
+**New Visualization Tools:**
+19) plot_bar_chart(data, x_column, y_column, title, xlabel=None, ylabel=None, horizontal=False, sort_by_x_desc=True) – Plots a bar chart from a DataFrame.
+20) plot_line_chart(data, x_column, y_column, title, hue_column=None, xlabel=None, ylabel=None) – Plots a line chart for time-series data.
+21) plot_dual_axis_line_chart(data, x_column, y1_column, y2_column, title, xlabel=None, y1_label=None, y2_label=None) – Plots two line charts on a dual y-axis.
 
-    if user_item_matrix is None or hybrid_similarity is None or sku_brand_map is None:
-        st.warning("Recommender system could not be initialized due to missing data or common SKUs.")
+**New Analysis & Reporting Tools:**
+22) brand_sku_pair_analysis(type, top_n=10) – Analyzes and plots most frequently co-purchased 'Brand' or 'SKU_Code' pairs.
+23) customer_profile_report(customer_phone) – Generates a comprehensive purchase report for a specific customer from `df`.
+24) heuristic_next_purchase_prediction(customer_phone) – Predicts next likely purchase (SKU level) for a customer from `df` based on historical intervals.
+25) sku_recommender(customer_phone, top_n=5) – Generates personalized SKU recommendations for a customer using a hybrid model (from `df` and `PRED_DF`).
+
+**Instructions for tool usage:**
+- When the user asks for “summary,” “data insights,” “actionable recommendations,” or a general overview of performance, prioritize calling `insights()`.
+- For specific data queries requiring visualization, use `groupby_agg` or `top_n` first to prepare the data, then use `plot_bar_chart`, `plot_line_chart`, or `plot_dual_axis_line_chart` to visualize the result.
+- For detailed customer information, use `customer_profile_report`.
+- For specific next-purchase predictions, use `heuristic_next_purchase_prediction` or refer to `PRED_DF` directly if model-based predictions are requested.
+- For product recommendations, use `sku_recommender`.
+- Always aim to provide actionable insights where possible.
+- Otherwise, pick exactly one tool that best fits and return one line of Python calling it (using named arguments). No explanations, no extra output—just the function call.
+""",
+    additional_authorized_imports=["pandas", "datetime", "io", "matplotlib.pyplot", "seaborn", "numpy", "itertools", "collections", "sklearn.metrics.pairwise", "sklearn.preprocessing"]
+)
+
+# --- Streamlit UI for interaction ---
+user_prompt = st.text_input("➡️ Your request:", key="user_input")
+
+if st.button("Get Response"):
+    if user_prompt:
+        with st.spinner("Thinking and analyzing..."):
+            full_prompt = f"""
+            You are a Grandmaster Data Science assistant helping a human analyze a pandas DataFrame named `df` and `PRED_DF`.
+            You have access to the following tools:
+            {agent.description}
+
+            Each tool has a defined purpose and must be called using named arguments only.
+            🧠 Your task:
+            Based on the user request, decide which tool best fits.
+            Then return ONLY one valid Python line calling that tool:
+            • ✅ Example → top_n(metric_column="revenue", n=10, group_columns="region")
+            • ❌ No comments, no explanations, no extra output
+            The DataFrames `df` and `PRED_DF` are already loaded and ready.
+            User request: {user_prompt!r}
+            Tool call:
+            """
+            try:
+                tool_call = agent.run(full_prompt).strip()
+                st.info(f"Agent chose to call: `{tool_call}`")
+
+                # Manually create tool_dispatch for direct execution in this script
+                tool_dispatch = {tool.name: tool.forward for tool in tools}
+
+                result = eval(tool_call, globals(), tool_dispatch)
+
+                st.subheader("Agent's Response:")
+                if isinstance(result, pd.DataFrame):
+                    st.dataframe(result)
+                elif isinstance(result, str) and "PLOTTED" in result:
+                    st.success("Plot generated successfully!")
+                    # The plot is automatically shown by plt.show() within the tool
+                elif isinstance(result, (pd.Series, str)):
+                    st.write(result)
+                else:
+                    st.write(f"Result: {result}")
+
+            except Exception as e:
+                st.error(f"❌ Error during tool execution: {str(e)}")
     else:
-        # Get list of customers from the user-item matrix
-        customer_list = sorted(user_item_matrix.index.tolist())
-        sel_customer_recommender = st.selectbox("Select Customer for Recommendations:", customer_list)
+        st.warning("Please enter a request.")
 
-        if st.button("Generate Recommendations"):
-            if sel_customer_recommender:
-                st.subheader(f"Recommendations for Customer {sel_customer_recommender}")
-
-                # Call the updated function to get two DataFrames
-                past_purchases_df, recommendations_df = combined_report_recommender(
-                    sel_customer_recommender, user_item_matrix, hybrid_similarity, DF, sku_brand_map, top_n=5
-                )
-
-                # --- Display Previously Purchased SKUs ---
-                st.markdown("### Previously Purchased SKUs")
-                if not past_purchases_df.empty:
-                    st.dataframe(past_purchases_df, use_container_width=True)
-                else:
-                    st.info("No past purchase data found for this customer.")
-
-                st.markdown("---") # Separator
-
-                # --- Display Recommended SKUs ---
-                st.markdown("### Recommended SKUs")
-                if not recommendations_df.empty:
-                    st.dataframe(recommendations_df, use_container_width=True, column_config={
-                        "Similarity_Score": st.column_config.NumberColumn(
-                            "Similarity Score",
-                            format="%.4f", # Format to 4 decimal places
-                            help="Higher score indicates stronger similarity/recommendation."
-                        )
-                    })
-                    st.info(
-                        "A higher 'Similarity Score' indicates a stronger recommendation."
-                    )
-                else:
-                    st.info("No new recommendations could be generated for this customer.")
-            else:
-                st.info("Please select a customer to generate recommendations.")
+st.markdown("---")
+st.markdown("For best results, be specific with your requests, e.g., 'Generate SKU recommendations for customer with phone number '8060733751'.'")
