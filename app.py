@@ -1,3 +1,10 @@
+#!pip install --quiet smolagents[toolkit] openai gradio
+#!pip install --quiet smolagents[toolkit,litellm] openai gradio
+
+import smolagents#[toolkit,litellm]
+#import openai
+#import gradio
+
 import streamlit as st
 import pandas as pd
 import numpy as np
