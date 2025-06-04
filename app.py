@@ -32,21 +32,35 @@ st.markdown("Ask me anything about your sales data from August 2024 to January 2
 @st.cache_data
 def load_sales_data_for_agent():
     try:
-        df_loaded = pd.read_csv("data_sample_analysis.csv", encoding='latin1')
-        df_loaded['Redistribution Value'] = df_loaded['Redistribution Value'].str.replace(',', '', regex=False).astype(float)
-        df_loaded['Delivered_date'] = pd.to_datetime(df_loaded['Delivered_date'], errors='coerce', dayfirst=True)
-        df_loaded['Month'] = df_loaded['Delivered_date'].dt.to_period('M')
-        df_loaded['Delivered Qty'] = df_loaded['Delivered Qty'].fillna(0)
-        df_loaded['Total_Amount_Spent'] = df_loaded['Redistribution Value'] * df_loaded['Delivered Qty']
-        if 'Order_Id' not in df_loaded.columns:
-            df_loaded['Order_Id'] = (
-                df_loaded['Customer_Phone'].astype(str) + '_' +
-                df_loaded['Delivered_date'].dt.strftime('%Y%m%d%H%M%S') + '_' +
-                df_loaded.groupby(['Customer_Phone', 'Delivered_date']).cumcount().astype(str)
+        df_loaded = pd.read_csv("data_sample_analysis.csv", encoding="latin1")
+        df_loaded["Redistribution Value"] = (
+            df_loaded["Redistribution Value"]
+            .str.replace(",", "", regex=False)
+            .astype(float)
+        )
+        df_loaded["Delivered_date"] = pd.to_datetime(
+            df_loaded["Delivered_date"], errors="coerce", dayfirst=True
+        )
+        df_loaded["Month"] = df_loaded["Delivered_date"].dt.to_period("M")
+        df_loaded["Delivered Qty"] = df_loaded["Delivered Qty"].fillna(0)
+        df_loaded["Total_Amount_Spent"] = (
+            df_loaded["Redistribution Value"] * df_loaded["Delivered Qty"]
+        )
+        if "Order_Id" not in df_loaded.columns:
+            df_loaded["Order_Id"] = (
+                df_loaded["Customer_Phone"].astype(str)
+                + "_"
+                + df_loaded["Delivered_date"].dt.strftime("%Y%m%d%H%M%S")
+                + "_"
+                + df_loaded.groupby(["Customer_Phone", "Delivered_date"])
+                .cumcount()
+                .astype(str)
             )
         return df_loaded
     except Exception as e:
-        st.error(f"Error loading sales data: {e}. Please ensure 'data_sample_analysis.csv' is available.")
+        st.error(
+            f"Error loading sales data: {e}. Please ensure 'data_sample_analysis.csv' is available."
+        )
         return pd.DataFrame()
 
 @st.cache_data
@@ -56,27 +70,35 @@ def load_model_preds_for_agent():
             "purchase_predictions_major.csv",
             parse_dates=["last_purchase_date", "pred_next_date"],
         )
-        preds_loaded = preds_loaded.rename(columns={
-            "pred_next_brand":     "Next Brand Purchase",
-            "pred_next_date":      "Next Purchase Date",
-            "pred_spend":          "Expected Spend",
-            "pred_qty":            "Expected Quantity",
-            "probability":         "Probability"
-        })
+        preds_loaded = preds_loaded.rename(
+            columns={
+                "pred_next_brand": "Next Brand Purchase",
+                "pred_next_date": "Next Purchase Date",
+                "pred_spend": "Expected Spend",
+                "pred_qty": "Expected Quantity",
+                "probability": "Probability",
+            }
+        )
         preds_loaded["Next Purchase Date"] = preds_loaded["Next Purchase Date"].dt.date
         preds_loaded["Expected Spend"] = preds_loaded["Expected Spend"].round(0).astype(int)
-        preds_loaded["Expected Quantity"] = preds_loaded["Expected Quantity"].round(0).astype(int)
+        preds_loaded["Expected Quantity"] = preds_loaded["Expected Quantity"].round(
+            0
+        ).astype(int)
         preds_loaded["Probability"] = (preds_loaded["Probability"] * 100).round(1)
+
         def suggest(p):
             if p >= 70:
                 return "Follow-up/Alert"
             if p >= 50:
                 return "Cross Sell"
             return "Discount"
+
         preds_loaded["Suggestion"] = preds_loaded["Probability"].apply(suggest)
         return preds_loaded
     except Exception as e:
-        st.warning(f"Error loading prediction data: {e}. Some prediction features may be unavailable.")
+        st.warning(
+            f"Error loading prediction data: {e}. Some prediction features may be unavailable."
+        )
         return pd.DataFrame()
 
 # Load dataframes
@@ -87,12 +109,16 @@ if df.empty:
     st.stop()  # Stop execution if main data isn't loaded
 
 # --- Helper function for co-purchase pairs ---
-def calculate_brand_sku_pairs_internal(data_frame, type_col='Brand'):
-    if 'Order_Id' not in data_frame.columns:
-        data_frame['Order_Id'] = (
-            data_frame['Customer_Phone'].astype(str) + "_" +
-            data_frame['Delivered_date'].dt.strftime('%Y%m%d%H%M%S') + "_" +
-            data_frame.groupby(['Customer_Phone', 'Delivered_date']).cumcount().astype(str)
+def calculate_brand_sku_pairs_internal(data_frame, type_col="Brand"):
+    if "Order_Id" not in data_frame.columns:
+        data_frame["Order_Id"] = (
+            data_frame["Customer_Phone"].astype(str)
+            + "_"
+            + data_frame["Delivered_date"].dt.strftime("%Y%m%d%H%M%S")
+            + "_"
+            + data_frame.groupby(["Customer_Phone", "Delivered_date"])
+            .cumcount()
+            .astype(str)
         )
     order_items = data_frame.groupby("Order_Id")[type_col].apply(set)
     pair_counts = Counter()
@@ -100,14 +126,18 @@ def calculate_brand_sku_pairs_internal(data_frame, type_col='Brand'):
         if len(items) > 1:
             for pair in combinations(items, 2):
                 pair_counts[tuple(sorted(pair))] += 1
-    pair_df = pd.DataFrame(pair_counts.items(), columns=[f"{type_col}_Pair_Tuple", "Count"]).sort_values(by="Count", ascending=False)
-    if type_col == 'SKU_Code':
-        sku_to_brand = data_frame.groupby('SKU_Code')['Brand'].first().to_dict()
+    pair_df = pd.DataFrame(
+        pair_counts.items(), columns=[f"{type_col}_Pair_Tuple", "Count"]
+    ).sort_values(by="Count", ascending=False)
+    if type_col == "SKU_Code":
+        sku_to_brand = data_frame.groupby("SKU_Code")["Brand"].first().to_dict()
         pair_df[f"{type_col}_Pair_Formatted"] = pair_df[f"{type_col}_Pair_Tuple"].apply(
             lambda x: f"{x[0]} ({sku_to_brand.get(x[0], 'Unknown')}) & {x[1]} ({sku_to_brand.get(x[1], 'Unknown')})"
         )
     else:
-        pair_df[f"{type_col}_Pair_Formatted"] = pair_df[f"{type_col}_Pair_Tuple"].apply(lambda x: f"{x[0]} & {x[1]}")
+        pair_df[f"{type_col}_Pair_Formatted"] = pair_df[f"{type_col}_Pair_Tuple"].apply(
+            lambda x: f"{x[0]} & {x[1]}"
+        )
     return pair_df
 
 # --- Tool Definitions ---
@@ -117,22 +147,23 @@ class HeadTool(Tool):
     description = "Return the first n rows of the DataFrame df."
     inputs = {"n": {"type": "integer", "description": "Number of rows to display"}}
     output_type = "object"
+
     def forward(self, n: int):
         return df.head(n)
 
 class TailTool(Tool):
     name = "tail"
-    description = "Return the last n rows of the DataFrame 'df'."
+    description = "Return the last n rows of the DataFrame df."
     inputs = {"n": {"type": "integer", "description": "Number of rows to display"}}
     output_type = "object"
+
     def forward(self, n: int):
         return df.tail(n)
 
 class DescribeTool(Tool):
     name = "describe"
     description = (
-        "Return summary statistics. If a column is given, describe that column; "
-        "otherwise, describe the entire DataFrame."
+        "Return summary statistics. If a column is given, describe that column; otherwise, describe the entire DataFrame."
     )
     inputs = {
         "column": {
@@ -143,6 +174,7 @@ class DescribeTool(Tool):
         }
     }
     output_type = "object"
+
     def forward(self, column: str = None):
         if column is None or column.lower() in ("all", ""):
             return df.describe(include="all")
@@ -156,6 +188,7 @@ class InfoTool(Tool):
     description = "Return the output of df.info() as a string."
     inputs = {}
     output_type = "string"
+
     def forward(self):
         buf = io.StringIO()
         df.info(buf=buf)
@@ -176,6 +209,7 @@ class HistogramTool(Tool):
         },
     }
     output_type = "string"
+
     def forward(self, column: str, bins: int = 10):
         if column not in df.columns:
             raise ValueError(f"Column '{column}' does not exist in df")
@@ -189,7 +223,7 @@ class HistogramTool(Tool):
         plt.title(f"Histogram of '{column}'")
         plt.xlabel(column)
         plt.ylabel("Frequency")
-        plt.grid(axis='y', alpha=0.5)
+        plt.grid(axis="y", alpha=0.5)
         plt.tight_layout()
         plt.show()
         return "PLOTTED"
@@ -204,6 +238,7 @@ class ScatterPlotTool(Tool):
         "column_y": {"type": "string", "description": "Name of the numeric column for the y-axis"},
     }
     output_type = "string"
+
     def forward(self, column_x: str, column_y: str):
         if column_x not in df.columns or column_y not in df.columns:
             raise ValueError(f"Columns '{column_x}' or '{column_y}' not found in df")
@@ -237,6 +272,7 @@ class CorrelationTool(Tool):
         }
     }
     output_type = "object"
+
     def forward(self, method: str = "pearson"):
         if method not in ("pearson", "spearman"):
             raise ValueError("Method must be 'pearson' or 'spearman'")
@@ -261,6 +297,7 @@ class PivotTableTool(Tool):
         },
     }
     output_type = "object"
+
     def forward(self, index: str, columns: str, values: str, aggfunc: str):
         if index not in df.columns or columns not in df.columns:
             raise ValueError(f"Index '{index}' or columns '{columns}' not found in df")
@@ -292,6 +329,7 @@ class FilterRowsTool(Tool):
         },
     }
     output_type = "object"
+
     def forward(self, column: str, operator: str, value: str):
         if column not in df.columns:
             raise ValueError(f"Column '{column}' not found in df")
@@ -332,6 +370,7 @@ class GroupByAggregateTool(Tool):
         },
     }
     output_type = "object"
+
     def forward(self, group_columns: str, metric_column: str, aggfunc: str):
         groups = [c.strip() for c in group_columns.split(",")]
         for c in groups:
@@ -341,7 +380,9 @@ class GroupByAggregateTool(Tool):
             raise ValueError(f"Metric column '{metric_column}' not found in df")
         if aggfunc not in ("sum", "mean", "count", "max", "min"):
             raise ValueError("aggfunc must be one of 'sum', 'mean', 'count', 'max', 'min'")
-        grouped = df.groupby(groups)[metric_column].agg(aggfunc).reset_index()
+        grouped = (
+            df.groupby(groups)[metric_column].agg(aggfunc).reset_index()
+        )
         return grouped
 
 class SortTool(Tool):
@@ -357,6 +398,7 @@ class SortTool(Tool):
         },
     }
     output_type = "object"
+
     def forward(self, column: str, ascending: bool):
         if column not in df.columns:
             raise ValueError(f"Column '{column}' not found in df")
@@ -384,13 +426,13 @@ class TopNTool(Tool):
             "description": "Sort order: True for ascending (bottom N), False for descending (top N). Default is False.",
             "required": False,
             "nullable": True,
-        }
+        },
     }
     output_type = "object"
+
     def forward(self, metric_column: str, n: int, group_columns: str = None, ascending: bool = False):
         if metric_column not in df.columns:
             raise ValueError(f"Metric column '{metric_column}' not found in df")
-
         if group_columns is None or not group_columns.strip():
             return df.sort_values(by=metric_column, ascending=ascending).head(n)
         else:
@@ -398,7 +440,6 @@ class TopNTool(Tool):
             for c in groups:
                 if c not in df.columns:
                     raise ValueError(f"Group-by column '{c}' not found in df")
-
             grouped = df.groupby(groups)[metric_column].sum().reset_index()
             return grouped.sort_values(by=metric_column, ascending=ascending).head(n)
 
@@ -424,10 +465,10 @@ class CrosstabTool(Tool):
         },
     }
     output_type = "object"
+
     def forward(self, row: str, column: str, aggfunc: str = None, values: str = None):
         if row not in df.columns or column not in df.columns:
             raise ValueError(f"Columns '{row}' or '{column}' not found in df")
-
         if aggfunc:
             if values is None:
                 raise ValueError("Please supply 'values' when using an aggregation function")
@@ -457,6 +498,7 @@ class LinRegEvalTool(Tool):
         },
     }
     output_type = "object"
+
     def forward(self, feature_columns: str, target_column: str, test_size: float = 0.2):
         feats = [c.strip() for c in feature_columns.split(",")]
         for c in feats:
@@ -464,21 +506,16 @@ class LinRegEvalTool(Tool):
                 raise ValueError(f"Feature column '{c}' not in df")
         if target_column not in df.columns:
             raise ValueError(f"Target column '{target_column}' not in df")
-
         sub = df[feats + [target_column]].dropna()
         X = sub[feats].values
         y = sub[target_column].values.astype(float)
-
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=42
         )
-
         model = LinearRegression()
         model.fit(X_train, y_train)
-
         r2_train = r2_score(y_train, model.predict(X_train))
         r2_test = r2_score(y_test, model.predict(X_test))
-
         metrics_df = pd.DataFrame({"r2": [r2_train, r2_test]}, index=["train", "test"])
         return metrics_df
 
@@ -497,6 +534,7 @@ class PredictLinearTool(Tool):
         },
     }
     output_type = "number"
+
     def forward(self, feature_columns: str, target_column: str, new_data: str):
         feats = [c.strip() for c in feature_columns.split(",")]
         if target_column not in df.columns:
@@ -504,18 +542,14 @@ class PredictLinearTool(Tool):
         for c in feats:
             if c not in df.columns:
                 raise ValueError(f"Feature column '{c}' not in df")
-
         values = [float(x.strip()) for x in new_data.split(",")]
         if len(values) != len(feats):
             raise ValueError("Number of new_data values must match number of features")
-
         sub = df[feats + [target_column]].dropna()
         X = sub[feats].values
         y = sub[target_column].values.astype(float)
-
         model = LinearRegression()
         model.fit(X, y)
-
         pred = model.predict(np.array(values).reshape(1, -1))[0]
         return pred
 
@@ -542,6 +576,7 @@ class RFClassifyTool(Tool):
         },
     }
     output_type = "object"
+
     def forward(
         self, feature_columns: str, target_column: str, test_size: float = 0.2, n_estimators: int = 100
     ):
@@ -551,18 +586,14 @@ class RFClassifyTool(Tool):
                 raise ValueError(f"Feature column '{c}' not in df")
         if target_column not in df.columns:
             raise ValueError(f"Target column '{target_column}' not in df")
-
         sub = df[feats + [target_column]].dropna()
         X = sub[feats].values
         y = sub[target_column].values
-
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=42
         )
-
         clf = RandomForestClassifier(n_estimators=n_estimators, random_state=42)
         clf.fit(X_train, y_train)
-
         preds = clf.predict(X_test)
         report = classification_report(y_test, preds, output_dict=True)
         acc = accuracy_score(y_test, preds)
@@ -574,6 +605,7 @@ class FinalAnswerTool(Tool):
     description = "Use this to return a direct final answer to the user as a string."
     inputs = {"text": {"type": "string", "description": "Final answer to return to the user."}}
     output_type = "string"
+
     def forward(self, text: str):
         return text
 
@@ -592,13 +624,19 @@ class InsightsTool(Tool):
     )
     inputs = {}
     output_type = "string"
+
     def forward(self):
         # Top 5 Brands by Revenue
         try:
-            df['Redistribution Value'] = pd.to_numeric(df['Redistribution Value'], errors='coerce').fillna(0)
+            df["Redistribution Value"] = pd.to_numeric(
+                df["Redistribution Value"], errors="coerce"
+            ).fillna(0)
             top5_brands = df.groupby("Brand")["Redistribution Value"].sum().nlargest(5)
             top5_summary = "\n".join(
-                [f"{(i+1)}. {brand} (Rev: {rev:,.0f})" for i, (brand, rev) in enumerate(top5_brands.items())]
+                [
+                    f"{(i+1)}. {brand} (Rev: {rev:,.0f})"
+                    for i, (brand, rev) in enumerate(top5_brands.items())
+                ]
             )
         except Exception as e:
             top5_summary = f"Could not calculate top 5 brands: {e}"
@@ -607,20 +645,26 @@ class InsightsTool(Tool):
         drop_insight = "Month-over-month drop analysis not performed due to data or processing issues."
         try:
             temp_df_for_dates = df.copy()
-            temp_df_for_dates['Delivered_date'] = pd.to_datetime(temp_df_for_dates['Delivered_date'], errors='coerce')
-            temp_df_for_dates['Month'] = temp_df_for_dates['Delivered_date'].dt.to_period('M')
-            temp_df_for_dates.dropna(subset=['Month', 'Redistribution Value'], inplace=True)
-
-            brand_month_rev = temp_df_for_dates.groupby(["Brand", "Month"])["Redistribution Value"].sum().unstack(fill_value=0)
+            temp_df_for_dates["Delivered_date"] = pd.to_datetime(
+                temp_df_for_dates["Delivered_date"], errors="coerce"
+            )
+            temp_df_for_dates["Month"] = temp_df_for_dates["Delivered_date"].dt.to_period("M")
+            temp_df_for_dates.dropna(subset=["Month", "Redistribution Value"], inplace=True)
+            brand_month_rev = (
+                temp_df_for_dates.groupby(["Brand", "Month"])["Redistribution Value"]
+                .sum()
+                .unstack(fill_value=0)
+            )
             mom_pct = brand_month_rev.pct_change(axis=1) * 100
             drops = mom_pct.stack().reset_index(name="MoM%").query("`MoM%` < -10")
-
             if not drops.empty:
                 drops_list = drops.groupby("Brand")["MoM%"].min().nsmallest(3)
                 drops_summary = "\n".join(
                     [f"- {brand}: {pct:.1f}% drop" for brand, pct in drops_list.items()]
                 )
-                drop_insight = f"Brands with >10% month-over-month revenue drop (top 3 worst):\n{drops_summary}"
+                drop_insight = (
+                    f"Brands with >10% month-over-month revenue drop (top 3 worst):\n{drops_summary}"
+                )
             else:
                 drop_insight = "No brands have experienced a significant month-over-month revenue drop (greater than 10%)."
         except Exception as e:
@@ -628,26 +672,32 @@ class InsightsTool(Tool):
 
         # Top 5 Customers by Lifetime Value
         try:
-            df['Redistribution Value'] = pd.to_numeric(df['Redistribution Value'], errors='coerce').fillna(0)
+            df["Redistribution Value"] = pd.to_numeric(
+                df["Redistribution Value"], errors="coerce"
+            ).fillna(0)
             cust_ltv = df.groupby("Customer_Phone")["Redistribution Value"].sum().nlargest(5)
             cust_names = df.drop_duplicates("Customer_Phone").set_index("Customer_Phone")["Customer_Name"]
             top5_cust_summary = "\n".join(
-                [f"{(i+1)}. {cust_names.get(phone, 'Unknown')} ({phone}) (Spend: {spend:,.0f})"
-                 for i, (phone, spend) in enumerate(cust_ltv.items())]
+                [
+                    f"{(i+1)}. {cust_names.get(phone, 'Unknown')} ({phone}) (Spend: {spend:,.0f})"
+                    for i, (phone, spend) in enumerate(cust_ltv.items())
+                ]
             )
         except Exception as e:
             top5_cust_summary = f"Could not calculate top 5 customers: {e}"
 
         # Next-Purchase Predictions (from PRED_DF)
         pred_insight = "Next-purchase predictions not available or PRED_DF not correctly structured/defined."
-        if 'PRED_DF' in globals() and not PRED_DF.empty and 'Probability' in PRED_DF.columns:
+        if "PRED_DF" in globals() and not PRED_DF.empty and "Probability" in PRED_DF.columns:
             try:
                 top_pred = PRED_DF.sort_values("Probability", ascending=False).head(3)[
                     ["Customer_Phone", "Next Brand Purchase", "Probability"]
                 ]
                 pred_list = "\n".join(
-                    [f"- {row['Customer_Phone']} likely to buy {row['Next Brand Purchase']} ({row['Probability']:.1f}%)"
-                     for _, row in top_pred.iterrows()]
+                    [
+                        f"- {row['Customer_Phone']} likely to buy {row['Next Brand Purchase']} ({row['Probability']:.1f}%)"
+                        for _, row in top_pred.iterrows()
+                    ]
                 )
                 pred_insight = f"Top 3 next-purchase high-confidence predictions:\n{pred_list}"
             except Exception as e:
@@ -658,7 +708,7 @@ class InsightsTool(Tool):
         # Co-purchase Patterns
         pair_insight = "Co-purchase patterns not found or calculation failed."
         try:
-            pairs = calculate_brand_sku_pairs_internal(df, type_col='Brand')
+            pairs = calculate_brand_sku_pairs_internal(df, type_col="Brand")
             top_pair = pairs.head(1)
             if not top_pair.empty:
                 pair_data = top_pair.iloc[0]
@@ -676,7 +726,10 @@ class InsightsTool(Tool):
             "4. For very frequent brand pairs, create combo promotions.",
         ]
         if "month-over-month revenue drop" in drop_insight:
-            recommendations.insert(1, "5. Investigate why certain brands are dropping (e.g., stock, pricing, competition).")
+            recommendations.insert(
+                1,
+                "5. Investigate why certain brands are dropping (e.g., stock, pricing, competition).",
+            )
 
         summary = [
             "## SALES DATA INSIGHTS",
@@ -712,6 +765,7 @@ class PlotBarChartTool(Tool):
         "sort_by_x_desc": {"type": "boolean", "description": "Sort bars by x-axis value in descending order (default True).", "required": False, "nullable": True},
     }
     output_type = "string"
+
     def forward(self, data: pd.DataFrame, x_column: str, y_column: str, title: str, xlabel: str = None, ylabel: str = None, horizontal: bool = False, sort_by_x_desc: bool = True):
         if data.empty:
             print("Provided DataFrame is empty, cannot plot.")
@@ -728,7 +782,7 @@ class PlotBarChartTool(Tool):
             sns.barplot(x=x_column, y=y_column, data=plot_data, palette="viridis")
         else:
             sns.barplot(x=y_column, y=x_column, data=plot_data, palette="viridis")
-            plt.xticks(rotation=45, ha='right')
+            plt.xticks(rotation=45, ha="right")
 
         plt.title(title, fontsize=16)
         plt.xlabel(xlabel if xlabel else x_column, fontsize=13)
@@ -752,6 +806,7 @@ class PlotLineChartTool(Tool):
         "ylabel": {"type": "string", "description": "Label for the y-axis (optional).", "required": False, "nullable": True},
     }
     output_type = "string"
+
     def forward(self, data: pd.DataFrame, x_column: str, y_column: str, title: str, hue_column: str = None, xlabel: str = None, ylabel: str = None):
         if data.empty:
             print("Provided DataFrame is empty, cannot plot.")
@@ -766,14 +821,14 @@ class PlotLineChartTool(Tool):
         if pd.api.types.is_period_dtype(plot_data[x_column]):
             plot_data[x_column] = plot_data[x_column].dt.to_timestamp()
         elif not pd.api.types.is_datetime64_any_dtype(plot_data[x_column]):
-            plot_data[x_column] = pd.to_datetime(plot_data[x_column], errors='coerce')
+            plot_data[x_column] = pd.to_datetime(plot_data[x_column], errors="coerce")
         plot_data.dropna(subset=[x_column], inplace=True)
 
         sns.lineplot(x=x_column, y=y_column, hue=hue_column, data=plot_data, marker="o")
         plt.title(title, fontsize=16)
         plt.xlabel(xlabel if xlabel else x_column, fontsize=13)
         plt.ylabel(ylabel if ylabel else y_column, fontsize=13)
-        plt.xticks(rotation=45, ha='right')
+        plt.xticks(rotation=45, ha="right")
         plt.grid(alpha=0.3)
         plt.tight_layout()
         plt.show()
@@ -795,6 +850,7 @@ class PlotDualAxisLineChartTool(Tool):
         "y2_label": {"type": "string", "description": "Label for the second y-axis (optional).", "required": False, "nullable": True},
     }
     output_type = "string"
+
     def forward(self, data: pd.DataFrame, x_column: str, y1_column: str, y2_column: str, title: str, xlabel: str = None, y1_label: str = None, y2_label: str = None):
         if data.empty:
             print("Provided DataFrame is empty, cannot plot.")
@@ -807,7 +863,7 @@ class PlotDualAxisLineChartTool(Tool):
         if pd.api.types.is_period_dtype(plot_data[x_column]):
             plot_data[x_column] = plot_data[x_column].dt.to_timestamp()
         elif not pd.api.types.is_datetime64_any_dtype(plot_data[x_column]):
-            plot_data[x_column] = pd.to_datetime(plot_data[x_column], errors='coerce')
+            plot_data[x_column] = pd.to_datetime(plot_data[x_column], errors="coerce")
         plot_data.dropna(subset=[x_column], inplace=True)
 
         color_y1 = "royalblue"
@@ -821,7 +877,7 @@ class PlotDualAxisLineChartTool(Tool):
             label=y1_label if y1_label else y1_column,
             ax=ax1,
             color=color_y1,
-            linewidth=2
+            linewidth=2,
         )
         ax2 = ax1.twinx()
         sns.lineplot(
@@ -832,7 +888,7 @@ class PlotDualAxisLineChartTool(Tool):
             label=y2_label if y2_label else y2_column,
             ax=ax2,
             color=color_y2,
-            linewidth=2
+            linewidth=2,
         )
 
         ax1.set_title(title, fontsize=16)
@@ -840,13 +896,13 @@ class PlotDualAxisLineChartTool(Tool):
         ax1.set_ylabel(y1_label if y1_label else y1_column, color=color_y1, fontsize=13)
         ax2.set_ylabel(y2_label if y2_label else y2_column, color=color_y2, fontsize=13)
 
-        ax1.tick_params(axis='y', labelcolor=color_y1)
-        ax2.tick_params(axis='y', labelcolor=color_y2)
-        ax1.tick_params(axis='x', rotation=45, labelsize=12)
+        ax1.tick_params(axis="y", labelcolor=color_y1)
+        ax2.tick_params(axis="y", labelcolor=color_y2)
+        ax1.tick_params(axis="x", rotation=45, labelsize=12)
 
         lines1, labels1 = ax1.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=12)
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left", fontsize=12)
         ax2.get_legend().remove()
 
         plt.tight_layout()
@@ -863,12 +919,13 @@ class BrandSKUPairAnalysisTool(Tool):
         "top_n": {"type": "integer", "description": "Number of top pairs to display (default 10).", "required": False, "nullable": True},
     }
     output_type = "string"
+
     def forward(self, type: str, top_n: int = 10):
-        if type not in ['Brand', 'SKU_Code']:
+        if type not in ["Brand", "SKU_Code"]:
             raise ValueError("Type must be 'Brand' or 'SKU_Code'.")
-        if type == 'Brand' and 'Brand' not in df.columns:
+        if type == "Brand" and "Brand" not in df.columns:
             raise ValueError("Brand column not found in DataFrame.")
-        if type == 'SKU_Code' and 'SKU_Code' not in df.columns:
+        if type == "SKU_Code" and "SKU_Code" not in df.columns:
             raise ValueError("SKU_Code column not found in DataFrame.")
 
         pair_df = calculate_brand_sku_pairs_internal(df, type_col=type)
@@ -879,12 +936,17 @@ class BrandSKUPairAnalysisTool(Tool):
             return "PLOT_FAILED: No pairs found"
 
         plt.figure(figsize=(12, max(7, top_n * 0.7)))
-        sns.barplot(data=pair_df, x="Count", y=f"{type}_Pair_Tuple".replace("_Tuple", "_Pair_Formatted"), palette="viridis")
+        sns.barplot(
+            data=pair_df,
+            x="Count",
+            y=f"{type}_Pair_Formatted",
+            palette="viridis",
+        )
         plt.title(f"Top {top_n} Most Frequently Bought {type} Pairs", fontsize=16)
         plt.xlabel("Number of Orders Together", fontsize=13)
         plt.ylabel(f"{type} Pair", fontsize=13)
         for i, v in enumerate(pair_df["Count"].values):
-            plt.text(v + 10, i, f'{v}', color='black', va='center', fontsize=11)
+            plt.text(v + 10, i, f"{v}", color="black", va="center", fontsize=11)
         plt.tight_layout()
         plt.show()
         return "PLOTTED"
@@ -898,19 +960,20 @@ class CustomerProfileReportTool(Tool):
         "customer_phone": {"type": "string", "description": "The phone number of the customer to analyze."},
     }
     output_type = "string"
+
     def forward(self, customer_phone: str):
-        customer_df = df[df['Customer_Phone'].astype(str) == customer_phone].copy()
+        customer_df = df[df["Customer_Phone"].astype(str) == customer_phone].copy()
         if customer_df.empty:
             return f"No data found for customer phone: {customer_phone}"
 
-        customer_df.sort_values('Delivered_date', inplace=True)
-        customer_df['Month'] = customer_df['Delivered_date'].dt.to_period('M')
+        customer_df.sort_values("Delivered_date", inplace=True)
+        customer_df["Month"] = customer_df["Delivered_date"].dt.to_period("M")
 
-        customer_name = customer_df['Customer_Name'].iloc[0] if not customer_df.empty else 'N/A'
-        brands_bought = customer_df['Brand'].unique().tolist()
+        customer_name = customer_df["Customer_Name"].iloc[0] if not customer_df.empty else "N/A"
+        brands_bought = customer_df["Brand"].unique().tolist()
         total_brands_bought = len(brands_bought)
-        total_unique_skus_bought = customer_df['SKU_Code'].nunique()
-        skus_bought = customer_df['SKU_Code'].unique().tolist()
+        total_unique_skus_bought = customer_df["SKU_Code"].nunique()
+        skus_bought = customer_df["SKU_Code"].unique().tolist()
 
         report_parts = [
             f"## Customer Purchase Profile for {customer_name} ({customer_phone})",
@@ -924,19 +987,35 @@ class CustomerProfileReportTool(Tool):
 
         report_parts.append("\n### Brand Level Purchase Summary:")
         for brand in brands_bought:
-            brand_df = customer_df[customer_df['Brand'] == brand]
-            last_purchase_date = brand_df['Delivered_date'].max().strftime('%Y-%m-%d') if not brand_df.empty else 'N/A'
-            total_quantity = brand_df['Delivered Qty'].sum()
-            total_spent = brand_df['Total_Amount_Spent'].sum()
-            report_parts.append(f"- **{brand}**: Last Purchase: {last_purchase_date}, Total Qty: {total_quantity}, Total Spent: {total_spent:,.2f}")
+            brand_df = customer_df[customer_df["Brand"] == brand]
+            last_purchase_date = (
+                brand_df["Delivered_date"].max().strftime("%Y-%m-%d")
+                if not brand_df.empty
+                else "N/A"
+            )
+            total_quantity = brand_df["Delivered Qty"].sum()
+            total_spent = brand_df["Total_Amount_Spent"].sum()
+            report_parts.append(
+                f"- **{brand}**: Last Purchase: {last_purchase_date}, Total Qty: {total_quantity}, Total Spent: {total_spent:,.2f}"
+            )
 
-        if 'Salesman_Name' in customer_df.columns and 'Order_Id' in customer_df.columns and not customer_df.empty:
-            salesman_unique_order_counts = customer_df.groupby('Salesman_Name')['Order_Id'].nunique()
+        if (
+            "Salesman_Name" in customer_df.columns
+            and "Order_Id" in customer_df.columns
+            and not customer_df.empty
+        ):
+            salesman_unique_order_counts = customer_df.groupby("Salesman_Name")["Order_Id"].nunique()
             if not salesman_unique_order_counts.empty and salesman_unique_order_counts.max() > 0:
                 most_sold_salesman_name = salesman_unique_order_counts.idxmax()
                 most_sold_salesman_count = salesman_unique_order_counts.max()
-                salesman_designation = customer_df[customer_df['Salesman_Name'] == most_sold_salesman_name]['Designation'].iloc[0] if 'Designation' in customer_df.columns else 'N/A'
-                report_parts.append(f"\n**Top Salesperson:** {most_sold_salesman_name} ({int(most_sold_salesman_count)} orders), Designation: {salesman_designation}")
+                salesman_designation = (
+                    customer_df[customer_df["Salesman_Name"] == most_sold_salesman_name]["Designation"].iloc[0]
+                    if "Designation" in customer_df.columns
+                    else "N/A"
+                )
+                report_parts.append(
+                    f"\n**Top Salesperson:** {most_sold_salesman_name} ({int(most_sold_salesman_count)} orders), Designation: {salesman_designation}"
+                )
             else:
                 report_parts.append("\n**Top Salesperson:** N/A (No sales data for salesperson)")
         else:
@@ -953,19 +1032,20 @@ class HeuristicNextPurchasePredictionTool(Tool):
         "customer_phone": {"type": "string", "description": "The phone number of the customer to predict for."},
     }
     output_type = "string"
+
     def forward(self, customer_phone: str):
-        customer_df = df[df['Customer_Phone'].astype(str) == customer_phone].copy()
+        customer_df = df[df["Customer_Phone"].astype(str) == customer_phone].copy()
         if customer_df.empty:
             return f"No data found for customer phone: {customer_phone}. Cannot make heuristic predictions."
 
-        customer_df['Delivered_date'] = pd.to_datetime(customer_df['Delivered_date'], errors='coerce')
-        customer_df.sort_values('Delivered_date', inplace=True)
-        customer_df['Month'] = customer_df['Delivered_date'].dt.to_period('M')
+        customer_df["Delivered_date"] = pd.to_datetime(customer_df["Delivered_date"], errors="coerce")
+        customer_df.sort_values("Delivered_date", inplace=True)
+        customer_df["Month"] = customer_df["Delivered_date"].dt.to_period("M")
 
-        last_purchase_date_sku = customer_df.groupby('SKU_Code')['Delivered_date'].max()
+        last_purchase_date_sku = customer_df.groupby("SKU_Code")["Delivered_date"].max()
         avg_interval_days = {}
-        for sku, grp in customer_df.groupby('SKU_Code'):
-            dates = grp['Delivered_date'].drop_duplicates().sort_values()
+        for sku, grp in customer_df.groupby("SKU_Code"):
+            dates = grp["Delivered_date"].drop_duplicates().sort_values()
             if len(dates) > 1:
                 intervals = dates.diff().dt.days.dropna()
                 if not intervals.empty:
@@ -975,30 +1055,30 @@ class HeuristicNextPurchasePredictionTool(Tool):
             else:
                 avg_interval_days[sku] = np.nan
 
-        avg_qty_sku = customer_df.groupby(['SKU_Code', 'Month'])['Delivered Qty'].sum().groupby('SKU_Code').mean().round(0)
-        avg_spend_sku = customer_df.groupby(['SKU_Code', 'Month'])['Total_Amount_Spent'].sum().groupby('SKU_Code').mean().round(0)
-        sku_to_brand = customer_df[['SKU_Code', 'Brand']].drop_duplicates().set_index('SKU_Code')['Brand']
+        avg_qty_sku = customer_df.groupby(["SKU_Code", "Month"])["Delivered Qty"].sum().groupby("SKU_Code").mean().round(0)
+        avg_spend_sku = customer_df.groupby(["SKU_Code", "Month"])["Total_Amount_Spent"].sum().groupby("SKU_Code").mean().round(0)
+        sku_to_brand = customer_df[["SKU_Code", "Brand"]].drop_duplicates().set_index("SKU_Code")["Brand"]
 
         sku_predictions_df = pd.DataFrame({
-            'Last Purchase Date': last_purchase_date_sku.dt.date,
-            'Avg Interval Days': pd.Series(avg_interval_days),
-            'Expected Quantity': avg_qty_sku,
-            'Expected Spend': avg_spend_sku
-        }).dropna(subset=['Avg Interval Days'])
+            "Last Purchase Date": last_purchase_date_sku.dt.date,
+            "Avg Interval Days": pd.Series(avg_interval_days),
+            "Expected Quantity": avg_qty_sku,
+            "Expected Spend": avg_spend_sku,
+        }).dropna(subset=["Avg Interval Days"])
 
         if not sku_predictions_df.empty:
-            sku_predictions_df['Next Purchase Date'] = (
-                pd.to_datetime(sku_predictions_df['Last Purchase Date']) +
-                pd.to_timedelta(sku_predictions_df['Avg Interval Days'], unit='D')
+            sku_predictions_df["Next Purchase Date"] = (
+                pd.to_datetime(sku_predictions_df["Last Purchase Date"])
+                + pd.to_timedelta(sku_predictions_df["Avg Interval Days"], unit="D")
             )
-            sku_predictions_df = sku_predictions_df.merge(sku_to_brand.rename('Brand'), left_index=True, right_index=True, how='left')
-            sku_predictions_df['Likely Purchase Date'] = sku_predictions_df['Next Purchase Date'].dt.strftime('%Y-%m-%d') + ' (' + sku_predictions_df['Next Purchase Date'].dt.day_name() + ')'
+            sku_predictions_df = sku_predictions_df.merge(sku_to_brand.rename("Brand"), left_index=True, right_index=True, how="left")
+            sku_predictions_df["Likely Purchase Date"] = sku_predictions_df["Next Purchase Date"].dt.strftime("%Y-%m-%d") + " (" + sku_predictions_df["Next Purchase Date"].dt.day_name() + ")"
 
         sku_predictions_df = sku_predictions_df.reset_index().rename(columns={
-            'index': 'SKU Code',
-            'Brand': 'Likely Brand',
+            "index": "SKU Code",
+            "Brand": "Likely Brand",
         })
-        sku_predictions_df = sku_predictions_df.sort_values(by='Next Purchase Date', ascending=True).head(3)
+        sku_predictions_df = sku_predictions_df.sort_values(by="Next Purchase Date", ascending=True).head(3)
 
         if sku_predictions_df.empty:
             return "No heuristic predictions could be generated for this customer."
@@ -1021,22 +1101,23 @@ class SKURecommenderTool(Tool):
         "top_n": {"type": "integer", "description": "Number of top recommendations to return (default 5).", "required": False, "nullable": True},
     }
     output_type = "string"
+
     def forward(self, customer_phone: str, top_n: int = 5):
         try:
-            user_item_matrix = df.pivot_table(index='Customer_Phone', columns='SKU_Code', values='Redistribution Value', aggfunc='sum', fill_value=0)
+            user_item_matrix = df.pivot_table(index="Customer_Phone", columns="SKU_Code", values="Redistribution Value", aggfunc="sum", fill_value=0)
             item_similarity = cosine_similarity(user_item_matrix.T)
             item_similarity_df = pd.DataFrame(item_similarity, index=user_item_matrix.columns, columns=user_item_matrix.columns)
 
-            item_attributes_cols = ['SKU_Code', 'Brand']
-            if 'Branch' in df.columns:
-                item_attributes_cols.append('Branch')
+            item_attributes_cols = ["SKU_Code", "Brand"]
+            if "Branch" in df.columns:
+                item_attributes_cols.append("Branch")
 
-            item_attributes = df[item_attributes_cols].drop_duplicates(subset=['SKU_Code']).set_index('SKU_Code')
-            for col in ['Brand', 'Branch']:
+            item_attributes = df[item_attributes_cols].drop_duplicates(subset=["SKU_Code"]).set_index("SKU_Code")
+            for col in ["Brand", "Branch"]:
                 if col in item_attributes.columns:
-                    item_attributes[col] = item_attributes[col].astype(str).fillna('Unknown')
+                    item_attributes[col] = item_attributes[col].astype(str).fillna("Unknown")
 
-            encoder = OneHotEncoder(handle_unknown='ignore')
+            encoder = OneHotEncoder(handle_unknown="ignore")
             item_features_encoded = encoder.fit_transform(item_attributes)
             content_similarity = cosine_similarity(item_features_encoded)
             content_similarity_df = pd.DataFrame(content_similarity, index=item_attributes.index, columns=item_attributes.index)
@@ -1049,7 +1130,7 @@ class SKURecommenderTool(Tool):
             filtered_content_similarity = content_similarity_df.loc[common_skus, common_skus]
             hybrid_similarity = (filtered_item_similarity + filtered_content_similarity) / 2
 
-            sku_brand_map = df[['SKU_Code', 'Brand']].drop_duplicates(subset='SKU_Code').set_index('SKU_Code')
+            sku_brand_map = df[["SKU_Code", "Brand"]].drop_duplicates(subset=["SKU_Code"]).set_index("SKU_Code")
         except Exception as e:
             return f"Error preparing recommender data: {e}"
 
@@ -1066,20 +1147,19 @@ class SKURecommenderTool(Tool):
             return "No valid purchased SKUs for similarity calculation. Cannot generate recommendations."
 
         sku_scores = hybrid_similarity[valid_purchased_skus].mean(axis=1)
-        sku_scores = sku_scores.drop(index=[s for s in purchased_skus if s in sku_scores.index], errors='ignore')
-
+        sku_scores = sku_scores.drop(index=[s for s in purchased_skus if s in sku_scores.index], errors="ignore")
         if sku_scores.empty:
             return "No new recommendations could be generated for this customer."
 
         top_skus = sku_scores.sort_values(ascending=False).head(top_n)
         recommendations_df = sku_brand_map.loc[top_skus.index.intersection(sku_brand_map.index)].copy()
-        recommendations_df['Similarity_Score'] = top_skus.loc[recommendations_df.index].values
+        recommendations_df["Similarity_Score"] = top_skus.loc[recommendations_df.index].values
         recommendations_df = recommendations_df.reset_index()
 
         report_parts = [f"### SKU Recommendations for Customer {customer_phone}:"]
         report_parts.append("\n**Previously Purchased SKUs:**")
         if purchased_skus:
-            past_purchases_info = df[df['Customer_Phone'].astype(str) == customer_phone][['SKU_Code', 'Brand']].drop_duplicates()
+            past_purchases_info = df[df["Customer_Phone"].astype(str) == customer_phone][["SKU_Code", "Brand"]].drop_duplicates()
             for _, row in past_purchases_info.iterrows():
                 report_parts.append(f"- {row['SKU_Code']} ({row['Brand']})")
         else:
@@ -1126,13 +1206,31 @@ sku_recommender_tool = SKURecommenderTool()
 
 # Construct the tool list
 tools = [
-    head_tool, tail_tool, info_tool, describe_tool, histogram_tool, scatter_tool,
-    correlation_tool, pivot_tool, filter_rows_tool, groupby_tool, sort_tool,
-    topn_tool, crosstab_tool, linreg_tool, predict_tool, rf_tool,
-    final_answer_tool, insights_tool,
-    plot_bar_chart_tool, plot_line_chart_tool, plot_dual_axis_line_chart_tool,
-    brand_sku_pair_analysis_tool, customer_profile_report_tool,
-    heuristic_next_purchase_prediction_tool, sku_recommender_tool,
+    head_tool,
+    tail_tool,
+    info_tool,
+    describe_tool,
+    histogram_tool,
+    scatter_tool,
+    correlation_tool,
+    pivot_tool,
+    filter_rows_tool,
+    groupby_tool,
+    sort_tool,
+    topn_tool,
+    crosstab_tool,
+    linreg_tool,
+    predict_tool,
+    rf_tool,
+    final_answer_tool,
+    insights_tool,
+    plot_bar_chart_tool,
+    plot_line_chart_tool,
+    plot_dual_axis_line_chart_tool,
+    brand_sku_pair_analysis_tool,
+    customer_profile_report_tool,
+    heuristic_next_purchase_prediction_tool,
+    sku_recommender_tool,
 ]
 
 # Initialize LiteLLMModel with the provided API key
@@ -1195,7 +1293,18 @@ You have access to these tools:
 - Always aim to provide actionable insights where possible.
 - Otherwise, pick exactly one tool that best fits and return one line of Python calling it (using named arguments). No explanations, no extra output—just the function call.
 """,
-    additional_authorized_imports=["pandas", "datetime", "io", "matplotlib.pyplot", "seaborn", "numpy", "itertools", "collections", "sklearn.metrics.pairwise", "sklearn.preprocessing"]
+    additional_authorized_imports=[
+        "pandas",
+        "datetime",
+        "io",
+        "matplotlib.pyplot",
+        "seaborn",
+        "numpy",
+        "itertools",
+        "collections",
+        "sklearn.metrics.pairwise",
+        "sklearn.preprocessing",
+    ],
 )
 
 # --- Streamlit UI for interaction ---
@@ -1205,20 +1314,20 @@ if st.button("Get Response"):
     if user_prompt:
         with st.spinner("Thinking and analyzing..."):
             full_prompt = f"""
-            You are a Grandmaster Data Science assistant helping a human analyze a pandas DataFrame named `df` and `PRED_DF`.
-            You have access to the following tools:
-            {agent.description}
+You are a Grandmaster Data Science assistant helping a human analyze a pandas DataFrame named `df` and `PRED_DF`.
+You have access to the following tools:
+{agent.description}
 
-            Each tool has a defined purpose and must be called using named arguments only.
-            🧠 Your task:
-            Based on the user request, decide which tool best fits.
-            Then return ONLY one valid Python line calling that tool:
-            • ✅ Example → top_n(metric_column="revenue", n=10, group_columns="region")
-            • ❌ No comments, no explanations, no extra output
-            The DataFrames `df` and `PRED_DF` are already loaded and ready.
-            User request: {user_prompt!r}
-            Tool call:
-            """
+Each tool has a defined purpose and must be called using named arguments only.
+🧠 Your task:
+Based on the user request, decide which tool best fits.
+Then return ONLY one valid Python line calling that tool:
+• ✅ Example → top_n(metric_column="revenue", n=10, group_columns="region")
+• ❌ No comments, no explanations, no extra output
+The DataFrames `df` and `PRED_DF` are already loaded and ready.
+User request: {user_prompt!r}
+Tool call:
+"""
             try:
                 tool_call = agent.run(full_prompt).strip()
                 st.info(f"Agent chose to call: `{tool_call}`")
@@ -1242,4 +1351,6 @@ if st.button("Get Response"):
         st.warning("Please enter a request.")
 
 st.markdown("---")
-st.markdown("For best results, be specific with your requests, e.g., 'Generate SKU recommendations for customer with phone number 8060733751.'")
+st.markdown(
+    "For best results, be specific with your requests, e.g., 'Generate SKU recommendations for customer with phone number 8060733751.'"
+)
