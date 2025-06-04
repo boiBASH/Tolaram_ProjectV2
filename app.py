@@ -29,6 +29,16 @@ st.set_page_config(page_title="Sales AI Agent", layout="wide")
 st.title("📊 Sales Intelligence AI Agent")
 st.markdown("Ask me anything about your sales data from August 2024 to January 2025!")
 
+# --- PROMPT FOR API KEY (new!) ---
+openrouter_api_key = st.text_input(
+    "🔑 Enter your OpenRouter API key:", 
+    type="password",
+    help="Your OpenRouter key starts with sk-or-…"
+)
+if not openrouter_api_key:
+    st.warning("You need to enter your API key to proceed.")
+    st.stop()
+
 # --- Data Loading (with Streamlit Caching) ---
 @st.cache_data
 def load_sales_data_for_agent():
@@ -389,7 +399,7 @@ class TopNTool(Tool):
         "Return the top N rows by a given metric. If group_columns is provided, "
         "it groups by those columns, aggregates metric_column by sum, then returns "
         "the top N groups. Otherwise, it simply sorts df by metric_column and returns top N rows."
-        "Specify ascending (True/False) for sorting order (True for bottom N, False for top N)."
+        "Specify ascending (True/False) for sorting order (True for bottom N), False for top N)."
     )
     inputs = {
         "metric_column": {"type": "string", "description": "Name of the numeric column to rank by"},
@@ -468,7 +478,7 @@ class LinRegEvalTool(Tool):
     description = (
         "Split df into train/test, train a LinearRegression model, and return R² on both sets. "
         "feature_columns: comma-separated list of features; target_column: name of target; "
-        "test_size: fraction for test (optional, default 0.2). "
+        "test_size: fraction for test (optional; default 0.2). "
         "Returns a pandas.DataFrame with 'train' and 'test' R²."
     )
     inputs = {
@@ -555,7 +565,7 @@ class RFClassifyTool(Tool):
     description = (
         "Split df into train/test, train a RandomForestClassifier, and return classification report. "
         "feature_columns: comma-separated features; target_column: name of target class; "
-        "test_size: fraction for test (optional, default 0.2). "
+        "test_size: fraction for test (optional; default 0.2). "
         "Returns a classification report dictionary."
     )
     inputs = {
@@ -718,7 +728,6 @@ class InsightsTool(Tool):
         if "month-over-month revenue drop" in drop_insight:
              recommendations.insert(1, "5. Investigate why certain brands are dropping (e.g., stock, pricing, competition).")
 
-
         summary = [
             "## SALES DATA INSIGHTS",
             "\n**1. Top 5 Brands by Revenue:**",
@@ -818,6 +827,7 @@ class SKURecommenderTool(Tool):
         recommendations_df['Similarity_Score'] = top_skus.loc[recommendations_df.index].values
         recommendations_df = recommendations_df.reset_index()
 
+        # Format output
         report_parts = [f"### SKU Recommendations for Customer {customer_phone}:"]
 
         report_parts.append("\n**Previously Purchased SKUs:**")
@@ -838,7 +848,7 @@ class SKURecommenderTool(Tool):
 
         return "\n".join(report_parts)
 
-# --- NEW PLOTTING TOOLS ---
+# --- NEW PLOTTING TOOLS --- 
 
 class PlotBarChartTool(Tool):
     name = "plot_bar_chart"
@@ -906,7 +916,7 @@ class PlotLineChartTool(Tool):
     def forward(self, data: pd.DataFrame, x_column: str, y_column: str, title: str, hue_column: str = None, xlabel: str = None, ylabel: str = None):
         if data.empty:
             print("Provided DataFrame is empty, cannot plot.")
-            return "PLOT_FAILED: Empty DataFrame"
+            return "PLOTTED: Empty DataFrame"
         if x_column not in data.columns or y_column not in data.columns:
             raise ValueError(f"Columns '{x_column}' or '{y_column}' not found in the provided DataFrame.")
         if hue_column and hue_column not in data.columns:
@@ -954,7 +964,7 @@ class PlotDualAxisLineChartTool(Tool):
     def forward(self, data: pd.DataFrame, x_column: str, y1_column: str, y2_column: str, title: str, xlabel: str = None, y1_label: str = None, y2_label: str = None):
         if data.empty:
             print("Provided DataFrame is empty, cannot plot.")
-            return "PLOT_FAILED: Empty DataFrame"
+            return "PLOTTED: Empty DataFrame"
         if not all(col in data.columns for col in [x_column, y1_column, y2_column]):
             raise ValueError("One or more specified columns not found in the provided DataFrame.")
 
@@ -1176,104 +1186,6 @@ class HeuristicNextPurchasePredictionTool(Tool):
         return "\n".join(prediction_summary)
 
 
-class SKURecommenderTool(Tool):
-    name = "sku_recommender"
-    description = (
-        "Generates personalized SKU recommendations for a customer based on a hybrid model. "
-        "Returns a string summary of previously purchased and recommended SKUs."
-    )
-    inputs = {
-        "customer_phone": {"type": "string", "description": "The phone number of the customer to recommend for."},
-        "top_n": {"type": "integer", "description": "Number of top recommendations to return (default 5).", "required": False, "nullable": True},
-    }
-    output_type = "string"
-
-    def forward(self, customer_phone: str, top_n: int = 5):
-        # Replicate prepare_recommender_data logic
-        try:
-            user_item_matrix = df.pivot_table(index='Customer_Phone', columns='SKU_Code', values='Redistribution Value', aggfunc='sum', fill_value=0)
-            item_similarity = cosine_similarity(user_item_matrix.T)
-            item_similarity_df = pd.DataFrame(item_similarity,
-                                              index=user_item_matrix.columns,
-                                              columns=user_item_matrix.columns)
-
-            item_attributes_cols = ['SKU_Code', 'Brand']
-            if 'Branch' in df.columns:
-                item_attributes_cols.append('Branch')
-
-            item_attributes = df[item_attributes_cols].drop_duplicates(subset=['SKU_Code']).set_index('SKU_Code')
-            for col in ['Brand', 'Branch']:
-                if col in item_attributes.columns:
-                    item_attributes[col] = item_attributes[col].astype(str).fillna('Unknown')
-
-            encoder = OneHotEncoder(handle_unknown='ignore')
-            item_features_encoded = encoder.fit_transform(item_attributes)
-            content_similarity = cosine_similarity(item_features_encoded)
-            content_similarity_df = pd.DataFrame(content_similarity,
-                                                  index=item_attributes.index,
-                                                  columns=item_attributes.index)
-
-            common_skus = item_similarity_df.index.intersection(content_similarity_df.index)
-            if common_skus.empty:
-                return "Recommender system could not be initialized: No common SKUs found between collaborative and content-based models."
-
-            filtered_item_similarity = item_similarity_df.loc[common_skus, common_skus]
-            filtered_content_similarity = content_similarity_df.loc[common_skus, common_skus]
-            hybrid_similarity = (filtered_item_similarity + filtered_content_similarity) / 2
-
-            sku_brand_map = df[['SKU_Code', 'Brand']].drop_duplicates(subset='SKU_Code').set_index('SKU_Code')
-
-        except Exception as e:
-            return f"Error preparing recommender data: {e}"
-
-        # Replicate recommend_skus_brands logic
-        if customer_phone not in user_item_matrix.index:
-            return f"Customer {customer_phone} not found in the purchase history for recommendations."
-
-        purchased_skus = user_item_matrix.loc[customer_phone]
-        purchased_skus = purchased_skus[purchased_skus > 0].index.tolist()
-
-        if not purchased_skus:
-            return f"Customer {customer_phone} has no recorded purchases. Cannot generate recommendations."
-
-        valid_purchased_skus = [sku for sku in purchased_skus if sku in hybrid_similarity.columns]
-        if not valid_purchased_skus:
-            return "No valid purchased SKUs for similarity calculation. Cannot generate recommendations."
-
-        sku_scores = hybrid_similarity[valid_purchased_skus].mean(axis=1)
-        sku_scores = sku_scores.drop(index=[s for s in purchased_skus if s in sku_scores.index], errors='ignore')
-
-        if sku_scores.empty:
-            return "No new recommendations could be generated for this customer."
-
-        top_skus = sku_scores.sort_values(ascending=False).head(top_n)
-
-        recommendations_df = sku_brand_map.loc[top_skus.index.intersection(sku_brand_map.index)].copy()
-        recommendations_df['Similarity_Score'] = top_skus.loc[recommendations_df.index].values
-        recommendations_df = recommendations_df.reset_index()
-
-        # Format output
-        report_parts = [f"### SKU Recommendations for Customer {customer_phone}:"]
-
-        report_parts.append("\n**Previously Purchased SKUs:**")
-        if purchased_skus:
-            past_purchases_info = df[df['Customer_Phone'].astype(str) == customer_phone][['SKU_Code', 'Brand']].drop_duplicates()
-            for _, row in past_purchases_info.iterrows():
-                report_parts.append(f"- {row['SKU_Code']} ({row['Brand']})")
-        else:
-            report_parts.append("No past purchase data found for this customer.")
-
-        report_parts.append("\n**Recommended SKUs:**")
-        if not recommendations_df.empty:
-            for _, row in recommendations_df.iterrows():
-                report_parts.append(f"- {row['SKU_Code']} ({row['Brand']}) - Similarity: {row['Similarity_Score']:.4f}")
-            report_parts.append("\n*A higher 'Similarity Score' indicates a stronger recommendation.*")
-        else:
-            report_parts.append("No new recommendations could be generated for this customer.")
-
-        return "\n".join(report_parts)
-
-
 # Instantiate ALL tools
 head_tool = HeadTool()
 tail_tool = TailTool()
@@ -1316,51 +1228,17 @@ tools = [
     heuristic_next_purchase_prediction_tool, sku_recommender_tool,
 ]
 
-# Initialize LiteLLMModel
+# --- Initialize LiteLLMModel (with user‐entered key) ---
 model = LiteLLMModel(
     model_id="openrouter/meta-llama/llama-4-maverick",
     temperature=0.2,
-    api_key= "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", # Use os.environ.get for robustness
-    #api_key=os.environ.get("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"), # Use os.environ.get for robustness
+    api_key=openrouter_api_key,  # ← use the key we prompted for
     additional_kwargs={
         "custom_llm_provider": "openrouter",
         "max_tokens": 1024,
         "max_completion_tokens": 1024,
     },
 )
-
-
-# # --- Instantiate all tools and create the CodeAgent ---
-# # (As defined in your Colab notebook, ensure all tools are instantiated)
-# tools = [
-#     HeadTool(), TailTool(), InfoTool(), DescribeTool(), HistogramTool(), ScatterPlotTool(),
-#     CorrelationTool(), PivotTableTool(), FilterRowsTool(), GroupByAggregateTool(), SortTool(),
-#     TopNTool(), CrosstabTool(), LinRegEvalTool(), PredictLinearTool(), RFClassifyTool(),
-#     FinalAnswerTool(), InsightsTool(),
-#     PlotBarChartTool(), PlotLineChartTool(), PlotDualAxisLineChartTool(),
-#     BrandSKUPairAnalysisTool(), CustomerProfileReportTool(),
-#     HeuristicNextPurchasePredictionTool(), SKURecommenderTool(),
-# ]
-
-
-# # Initialize LiteLLMModel
-# # Use st.secrets for API key in Streamlit Cloud
-# # For local testing, ensure OPENROUTER_API_KEY is an environment variable
-# openrouter_api_key = st.secrets.get("OPENROUTER_API_KEY")
-# if not openrouter_api_key:
-#     st.error("OpenRouter API key not found. Please set it in Streamlit secrets or as an environment variable.")
-#     st.stop()
-
-# model = LiteLLMModel(
-#     model_id="openrouter/meta-llama/llama-4-maverick",
-#     temperature=0.2,
-#     api_key=openrouter_api_key,
-#     additional_kwargs={
-#         "custom_llm_provider": "openrouter",
-#         "max_tokens": 1024,
-#         "max_completion_tokens": 1024,
-#     },
-# )
 
 agent = CodeAgent(
     tools=tools,
@@ -1461,3 +1339,5 @@ if st.button("Get Response"):
 
 st.markdown("---")
 st.markdown("For best results, be specific with your requests, e.g., 'Generate SKU recommendations for customer with phone number '8060733751'.'")
+
+# EOF
