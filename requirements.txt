@@ -162,7 +162,7 @@ simplejson==3.20.1
 six==1.17.0
 sklearn-compat==0.1.3
 smmap==5.0.2
-smolagents==1.16.1
+smolagents==1.17.0
 sniffio==1.3.1
 soupsieve==2.7
 stack-data==0.6.3
