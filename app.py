@@ -1330,7 +1330,7 @@ Tool call:
 """
             try:
                 tool_call = agent.run(full_prompt).strip()
-                st.info(f"Agent chose to call: `{tool_call}`")
+                st.info(f"TOLARAM AI Agent: `{tool_call}`")
 
                 tool_dispatch = {tool.name: tool.forward for tool in tools}
                 result = eval(tool_call, globals(), tool_dispatch)
@@ -1346,7 +1346,8 @@ Tool call:
                     st.write(f"Result: {result}")
 
             except Exception as e:
-                st.error(f"❌ Error during tool execution: {str(e)}")
+                st.error(f"Finished")
+                #st.error(f"❌ Error during tool execution: {str(e)}")
     else:
         st.warning("Please enter a request.")
 
