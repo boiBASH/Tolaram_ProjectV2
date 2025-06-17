@@ -791,6 +791,7 @@ class PlotBarChartTool(Tool):
         plt.ylabel(ylabel if ylabel else y_column, fontsize=13)
         plt.tight_layout()
         plt.show()
+        st.pyplot(plt.gcf())
         return "PLOTTED"
 
 class PlotLineChartTool(Tool):
@@ -834,6 +835,7 @@ class PlotLineChartTool(Tool):
         plt.grid(alpha=0.3)
         plt.tight_layout()
         plt.show()
+        st.pyplot(plt.gcf())
         return "PLOTTED"
 
 class PlotDualAxisLineChartTool(Tool):
@@ -909,6 +911,7 @@ class PlotDualAxisLineChartTool(Tool):
 
         plt.tight_layout()
         plt.show()
+        st.pyplot(plt.gcf())
         return "PLOTTED"
 
 class BrandSKUPairAnalysisTool(Tool):
