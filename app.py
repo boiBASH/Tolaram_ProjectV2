@@ -1238,7 +1238,7 @@ tools = [
 # Initialize LiteLLMModel with the provided API key
 model = LiteLLMModel(
     model_id="openrouter/openai/chatgpt-4o-latest",
-    temperature=0.2,
+    temperature=0.4,
     api_key=api_key,
     additional_kwargs={
         "custom_llm_provider": "openrouter",
