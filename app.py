@@ -1242,8 +1242,8 @@ model = LiteLLMModel(
     api_key=api_key,
     additional_kwargs={
         "custom_llm_provider": "openrouter",
-        "max_tokens": 1024,
-        "max_completion_tokens": 1024,
+        "max_tokens": 4096 ,
+        "max_completion_tokens": 2048,
     },
 )
 
