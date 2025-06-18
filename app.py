@@ -954,6 +954,7 @@ class BrandSKUPairAnalysisTool(Tool):
             plt.text(v + 10, i, f"{v}", color="black", va="center", fontsize=11)
         plt.tight_layout()
         plt.show()
+        st.pyplot(plt.gcf())
         return "PLOTTED"
 
 class CustomerProfileReportTool(Tool):
