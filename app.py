@@ -1030,12 +1030,11 @@ class CoPurchaseValueTool(Tool):
     name = "copurchase_value"
     description = (
         "Compute top SKU and Brand co-purchase pairs by total Redistribution Value. "
-        "Optionally filter by Salesman_Name. Returns a pandas.DataFrame with columns: "
-        "SKU_1, SKU_2, Brand_1, Brand_2, Total_Redistribution_Value."
+        "Optionally filter by Salesman_Name."
     )
     inputs = {
-        "top_n":    {"type": "integer", "description": "Number of top pairs to return (default 5)", "required": False, "nullable": True},
-        "salesman": {"type": "string",  "description": "Optional Salesman_Name to filter by",   "required": False, "nullable": True},
+        "top_n":    {"type": "integer", "description": "Number of top pairs to return", "required": False, "nullable": True},
+        "salesman": {"type": "string",  "description": "Optional Salesman_Name",         "required": False, "nullable": True},
     }
     output_type = "object"
 
