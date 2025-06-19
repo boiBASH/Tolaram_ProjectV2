@@ -918,11 +918,14 @@ class PlotDualAxisLineChartTool(Tool):
 
 class CrossSellAnalysisTool(Tool):
     name = "cross_sell_analysis"
-    description = "Generate actionable cross-selling recommendations."
+    description = (
+        "Generate actionable cross-selling recommendations from co-purchase patterns. "
+        "Specify type='Brand' or 'SKU_Code', top_n number of pairs, optional salesman."
+    )
     inputs = {
-        "type":     {"type": "string", "description": "'Brand' or 'SKU_Code'",        "required": True,  "nullable": False},
-        "top_n":    {"type": "integer", "description": "Number of top pairs",            "required": False, "nullable": True},
-        "salesman": {"type": "string",  "description": "Optional Salesman_Name",      "required": False, "nullable": True},
+        "type":     {"type": "string",  "description": "'Brand' or 'SKU_Code'", "required": True,  "nullable": False},
+        "top_n":    {"type": "integer", "description": "Number of top pairs (default 5)",     "required": False, "nullable": True},
+        "salesman": {"type": "string",  "description": "Optional Salesman_Name",              "required": False, "nullable": True},
     }
     output_type = "string"
 
@@ -1027,12 +1030,11 @@ class CoPurchaseValueTool(Tool):
     name = "copurchase_value"
     description = (
         "Compute top SKU and Brand co-purchase pairs by total Redistribution Value. "
-        "Optionally filter by Salesman_Name. Returns a pandas.DataFrame with columns: "
-        "SKU_1, SKU_2, Brand_1, Brand_2, Total_Redistribution_Value."
+        "Optionally filter by Salesman_Name."
     )
     inputs = {
-        "top_n":    {"type": "integer", "description": "Number of top pairs to return (default 5)", "required": False, "nullable": True},
-        "salesman": {"type": "string",  "description": "Optional Salesman_Name to filter by",       "required": False, "nullable": True},
+        "top_n":    {"type": "integer", "description": "Number of top pairs to return", "required": False, "nullable": True},
+        "salesman": {"type": "string",  "description": "Optional Salesman_Name",        "required": False, "nullable": True},
     }
     output_type = "object"
 
@@ -1146,7 +1148,7 @@ class CustomerListTool(Tool):
     inputs = {
         "salesman": {"type": "string", "description": "Salesman_Name to filter by", "required": True, "nullable": False},
         "brand":    {"type": "string", "description": "Brand to filter by",        "required": True, "nullable": False},
-        "month":    {"type": "string", "description": "Month in YYYY-MM format",       "required": True, "nullable": False},
+        "month":    {"type": "string", "description": "Month in YYYY-MM format",   "required": True, "nullable": False},
     }
     output_type = "object"
 
@@ -1298,11 +1300,11 @@ tools = [
     plot_line_chart_tool,
     plot_dual_axis_line_chart_tool,
     cross_sell_analysis_tool,
+    copurchase_value_tool,
     customer_list_tool,
     customer_profile_report_tool,
     heuristic_next_purchase_prediction_tool,
     sku_recommender_tool,
-    copurchase_value_tool,
 ]
 
 # Initialize LiteLLMModel with the provided API key
