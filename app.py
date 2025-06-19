@@ -1146,9 +1146,9 @@ class CustomerListTool(Tool):
         "List unique customers served by a given Salesman for a specific Brand in a given Month."
     )
     inputs = {
-        "salesman": {"type": "string", "description": "Salesman_Name to filter by", "required": True,  "nullable": False},
-        "brand":    {"type": "string", "description": "Brand to filter by",        "required": True,  "nullable": False},
-        "month":    {"type": "string", "description": "Month in YYYY-MM format",       "required": True,  "nullable": False},
+        "salesman": {"type": "string", "description": "Salesman_Name to filter by", "required": True},
+        "brand":    {"type": "string", "description": "Brand to filter by",        "required": True},
+        "month":    {"type": "string", "description": "Month in YYYY-MM format",       "required": True},
     }
     output_type = "object"
 
