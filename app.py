@@ -207,7 +207,6 @@ class HistogramTool(Tool):
             "type": "integer",
             "description": "Number of bins for the histogram (optional)",
             "required": False,
-            "nullable": True,
         },
     }
     output_type = "string"
@@ -272,7 +271,6 @@ class CorrelationTool(Tool):
             "type": "string",
             "description": "Correlation method: 'pearson' or 'spearman' (optional)",
             "required": False,
-            "nullable": True,
         }
     }
     output_type = "object"
@@ -417,7 +415,7 @@ class SortTool(Tool):
 class TopNTool(Tool):
     name = "top_n"
     description = (
-        "Return the top N rows by a given metric. If group_columns is provided, "
+        "Return the top N rows by a given metric. If group_columns is provided,"
         "it groups by those columns, aggregates metric_column by sum, then returns "
         "the top N groups. Otherwise, it simply sorts df by metric_column and returns top N rows. "
         "Specify ascending (True/False) for sorting order (True for bottom N, False for top N)."
@@ -435,7 +433,6 @@ class TopNTool(Tool):
             "type": "boolean",
             "description": "Sort order: True for ascending (bottom N), False for descending (top N). Default is False.",
             "required": False,
-            "nullable": True,
         },
     }
     output_type = "object"
@@ -504,7 +501,6 @@ class LinRegEvalTool(Tool):
             "type": "number",
             "description": "Fraction of data to use as test (optional; default 0.2)",
             "required": False,
-            "nullable": True,
         },
     }
     output_type = "object"
@@ -524,16 +520,18 @@ class LinRegEvalTool(Tool):
         )
         model = LinearRegression()
         model.fit(X_train, y_train)
-        r2_train = r2_score(y_train, model.predict(X_train))
-        r2_test = r2_score(y_test, model.predict(X_test))
-        metrics_df = pd.DataFrame({"r2": [r2_train, r2_test]}, index=["train", "test"])
-        return metrics_df
+        train_r2 = r2_score(y_train, model.predict(X_train))
+        test_r2 = r2_score(y_test, model.predict(X_test))
+        return pd.DataFrame({"set": ["train", "test"], "r2": [train_r2, test_r2]})
 
 class PredictLinearTool(Tool):
     name = "predict_linear"
     description = (
-        "Train a LinearRegression model on the entire df using feature_columns then predict on a new row. "
-        "feature_columns: comma-separated features; target_column: name of target; new_data: comma-separated numeric values. Returns the predicted numeric value."
+        "Fit a simple linear regression on the given feature(s) to predict the target. "
+        "All non-numeric values will be treated as missing. "
+        "feature_columns: comma-separated list of numeric features; target_column: name of target. "
+        "new_data: comma-separated numeric values for the new sample, same order as feature_columns. "
+        "Returns the predicted value for the new sample."
     )
     inputs = {
         "feature_columns": {"type": "string", "description": "Comma-separated column names to use as features", "required": True},
@@ -577,13 +575,11 @@ class RFClassifyTool(Tool):
             "type": "number",
             "description": "Fraction of data to use as test (optional; default 0.2)",
             "required": False,
-            "nullable": True,
         },
         "n_estimators": {
             "type": "integer",
             "description": "Number of trees in the forest (optional; default 100)",
             "required": False,
-            "nullable": True,
         },
     }
     output_type = "object"
@@ -746,13 +742,13 @@ class InsightsTool(Tool):
             "## SALES DATA INSIGHTS",
             "\n**1. Top 5 Brands by Revenue:**",
             top5_summary,
-            "\n**2. Month-over-Month Drops:**",
+            "\n**2. Brands With Significant MoM Drops:**",
             drop_insight,
             "\n**3. Top 5 Customers by Lifetime Value:**",
             top5_cust_summary,
-            "\n**4. Next-Purchase High-Confidence Predictions (from Model):**",
+            "\n**4. High-Confidence Next-Purchase Predictions:**",
             pred_insight,
-            "\n**5. Most Frequent Co-Purchase Patterns (Brands):**",
+            "\n**5. Co-Purchase Patterns:**",
             pair_insight,
             "\n**6. Actionable Recommendations:**",
             "\n".join(recommendations),
@@ -772,8 +768,8 @@ class PlotBarChartTool(Tool):
         "title": {"type": "string", "description": "Title of the chart.", "required": True},
         "xlabel": {"type": "string", "description": "Label for the x-axis (optional).", "required": False, "nullable": True},
         "ylabel": {"type": "string", "description": "Label for the y-axis (optional).", "required": False, "nullable": True},
-        "horizontal": {"type": "boolean", "description": "Set to True for horizontal bars (default False).", "required": False, "nullable": True},
-        "sort_by_x_desc": {"type": "boolean", "description": "Sort bars by x-axis value in descending order (default True).", "required": False, "nullable": True},
+        "horizontal": {"type": "boolean", "description": "Set to True for horizontal bars (default False).", "required": False},
+        "sort_by_x_desc": {"type": "boolean", "description": "Sort bars by x-axis value in descending order (default True).", "required": False},
     }
     output_type = "string"
 
@@ -1041,7 +1037,7 @@ class CoPurchaseValueTool(Tool):
         "Optionally filter by Salesman_Name."
     )
     inputs = {
-        "top_n":    {"type": "integer", "description": "Number of top pairs to return", "required": False, "nullable": True},
+        "top_n":    {"type": "integer", "description": "Number of top pairs to return", "required": False},
         "salesman": {"type": "string",  "description": "Optional Salesman_Name",        "required": False, "nullable": True},
     }
     output_type = "object"
@@ -1155,7 +1151,9 @@ class CustomerListTool(Tool):
     )
     inputs = {
         "salesman": {"type": "string", "description": "Salesman_Name to filter by", "required": True},
+
         "brand":    {"type": "string", "description": "Brand to filter by",        "required": True},
+   
         "month":    {"type": "string", "description": "Month in YYYY-MM format",   "required": True},
     }
     output_type = "object"
@@ -1164,24 +1162,34 @@ class CustomerListTool(Tool):
         for col in ["Salesman_Name", "Brand", "Month"]:
             if col not in df.columns:
                 raise ValueError(f"{col} column not found in DataFrame.")
-        sub = df[(df["Salesman_Name"] == salesman) & (df["Brand"] == brand) & (df["Month"] == month)]
-        return sub[["Customer_Name"]].drop_duplicates().reset_index(drop=True)
-
+        month_period = pd.Period(month, freq="M")
+        filtered_df = df[
+            (df["Salesman_Name"] == salesman)
+            & (df["Brand"] == brand)
+            & (df["Month"] == month_period)
+        ]
+        customers = filtered_df["Customer_Phone"].unique().tolist()
+        return pd.DataFrame({"Customer_Phone": customers})
 
 class SKURecommenderTool(Tool):
     name = "sku_recommender"
     description = (
-        "Generates personalized SKU recommendations for a customer based on a hybrid model. Returns a string summary of previously purchased and recommended SKUs."
+        "Recommend SKUs to a customer based on collaborative, content, and hybrid filtering. "
+        "Returns a string report describing the top recommended SKUs with a similarity score."
     )
     inputs = {
         "customer_phone": {"type": "string", "description": "The phone number of the customer to recommend for.", "required": True},
         "top_n": {"type": "integer", "description": "Number of top recommendations to return (default 5).", "required": False, "nullable": True},
+
     }
     output_type = "string"
 
     def forward(self, customer_phone: str, top_n: int = 5):
         try:
-            user_item_matrix = df.pivot_table(index="Customer_Phone", columns="SKU_Code", values="Redistribution Value", aggfunc="sum", fill_value=0)
+            purchase_matrix = df.pivot_table(
+                index="Customer_Phone", columns="SKU_Code", values="Delivered Qty", aggfunc="sum", fill_value=0
+            )
+            user_item_matrix = purchase_matrix.astype(float)
             item_similarity = cosine_similarity(user_item_matrix.T)
             item_similarity_df = pd.DataFrame(item_similarity, index=user_item_matrix.columns, columns=user_item_matrix.columns)
 
