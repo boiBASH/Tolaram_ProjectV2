@@ -170,7 +170,7 @@ class DescribeTool(Tool):
         "column": {
             "type": "string",
             "description": "Name of column to describe ('all' for full df)",
-            #"nullable": True,
+            "nullable": True,
             "required": False,
         }
     }
