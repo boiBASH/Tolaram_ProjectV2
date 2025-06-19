@@ -13,7 +13,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_scoref
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, accuracy_score
 
@@ -170,7 +170,7 @@ class DescribeTool(Tool):
         "column": {
             "type": "string",
             "description": "Name of column to describe ('all' for full df)",
-            "nullable": True,
+            #"nullable": True,
             "required": False,
         }
     }
@@ -422,13 +422,13 @@ class TopNTool(Tool):
             "type": "string",
             "description": "Comma-separated columns to group by (optional)",
             "required": False,
-            "nullable": True,
+            #"nullable": True,
         },
         "ascending": {
             "type": "boolean",
             "description": "Sort order: True for ascending (bottom N), False for descending (top N). Default is False.",
             "required": False,
-            "nullable": True,
+            #"nullable": True,
         },
     }
     output_type = "object"
@@ -458,13 +458,13 @@ class CrosstabTool(Tool):
             "type": "string",
             "description": "Aggregation function: 'count', 'sum', 'mean' (optional)",
             "required": False,
-            "nullable": True,
+            #"nullable": True,
         },
         "values": {
             "type": "string",
             "description": "Name of value column if aggfunc is not None (optional)",
             "required": False,
-            "nullable": True,
+            #"nullable": True,
         },
     }
     output_type = "object"
@@ -497,7 +497,7 @@ class LinRegEvalTool(Tool):
             "type": "number",
             "description": "Fraction of data to use as test (optional; default 0.2)",
             "required": False,
-            "nullable": True,
+            #"nullable": True,
         },
     }
     output_type = "object"
@@ -569,13 +569,13 @@ class RFClassifyTool(Tool):
             "type": "number",
             "description": "Fraction of data to use as test (optional; default 0.2)",
             "required": False,
-            "nullable": True,
+            #"nullable": True,
         },
         "n_estimators": {
             "type": "integer",
             "description": "Number of trees in the forest (optional; default 100)",
             "required": False,
-            "nullable": True,
+            #"nullable": True,
         },
     }
     output_type = "object"
