@@ -579,11 +579,13 @@ class RFClassifyTool(Tool):
             "type": "number",
             "description": "Fraction of data to use as test (optional; default 0.2)",
             "required": False,
+            "nullable": True,
         },
         "n_estimators": {
             "type": "integer",
             "description": "Number of trees in the forest (optional; default 100)",
             "required": False,
+            "nullable": True,
         },
     }
     output_type = "object"
