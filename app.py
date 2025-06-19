@@ -1043,7 +1043,7 @@ class CoPurchaseValueTool(Tool):
         "Optionally filter by Salesman_Name."
     )
     inputs = {
-        "top_n":    {"type": "integer", "description": "Number of top pairs to return", "required": False},
+        "top_n":    {"type": "integer", "description": "Number of top pairs to return", "required": False, "nullable": True},
         "salesman": {"type": "string",  "description": "Optional Salesman_Name",        "required": False, "nullable": True},
     }
     output_type = "object"
