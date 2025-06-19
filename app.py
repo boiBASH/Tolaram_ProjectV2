@@ -919,13 +919,13 @@ class PlotDualAxisLineChartTool(Tool):
 class CrossSellAnalysisTool(Tool):
     name = "cross_sell_analysis"
     description = (
-        "Generate actionable cross-selling recommendations from co-purchase data, optionally filtered by Salesman_Name. "
-        "Specify type='Brand' or 'SKU_Code', top_n as number of pairs, and optional salesman. Returns a string with bundle suggestions."
+        "Generate actionable cross-selling recommendations from co-purchase patterns. "
+        "Specify type='Brand' or 'SKU_Code', top_n number of pairs, optional salesman."
     )
     inputs = {
-        "type":     {"type": "string", "description": "Specify 'Brand' or 'SKU_Code'", "required": True,  "nullable": False},
-        "top_n":    {"type": "integer","description": "Number of top pairs to analyze (default 5)", "required": False, "nullable": True},
-        "salesman": {"type": "string", "description": "Optional Salesman_Name to filter by",    "required": False, "nullable": True},
+        "type":     {"type": "string",  "description": "'Brand' or 'SKU_Code'", "required": True,  "nullable": False},
+        "top_n":    {"type": "integer", "description": "Number of top pairs (default 5)",     "required": False, "nullable": True},
+        "salesman": {"type": "string",  "description": "Optional Salesman_Name",              "required": False, "nullable": True},
     }
     output_type = "string"
 
@@ -933,28 +933,26 @@ class CrossSellAnalysisTool(Tool):
         if type not in ["Brand", "SKU_Code"]:
             raise ValueError("Type must be 'Brand' or 'SKU_Code'.")
         df_sub = df
-        if salesman:
+        if salesman is not None:
             if "Salesman_Name" not in df.columns:
                 raise ValueError("Salesman_Name column not found in DataFrame.")
-            df_sub = df[df["Salesman_Name"] == salesman]
+            df_sub = df_sub[df_sub["Salesman_Name"] == salesman]
             if df_sub.empty:
                 return f"No records found for Salesman_Name: {salesman}"
-
         pairs = calculate_brand_sku_pairs_internal(df_sub, type_col=type).head(top_n)
         if pairs.empty:
             return "No co-purchase data available to generate recommendations."
-
         recs = []
         for _, row in pairs.iterrows():
             a, b, cnt = row[f"{type}_1"], row[f"{type}_2"], row["Count"]
             context = f" for {salesman}" if salesman else ""
             recs.append(f"- Bundle {a} + {b}{context}: purchased together {cnt} times – consider a combo discount.")
-
         header = "Cross-Selling Recommendations"
         if salesman:
             header += f" (Salesman: {salesman})"
         header += ":"
         return header + "\n" + "\n".join(recs)
+
 
 class CustomerProfileReportTool(Tool):
     name = "customer_profile_report"
@@ -1028,6 +1026,52 @@ class CustomerProfileReportTool(Tool):
 
         return "\n".join(report_parts)
 
+class CoPurchaseValueTool(Tool):
+    name = "copurchase_value"
+    description = (
+        "Compute top SKU and Brand co-purchase pairs by total Redistribution Value. "
+        "Optionally filter by Salesman_Name. Returns a pandas.DataFrame with columns: "
+        "SKU_1, SKU_2, Brand_1, Brand_2, Total_Redistribution_Value."
+    )
+    inputs = {
+        "top_n":    {"type": "integer", "description": "Number of top pairs to return (default 5)", "required": False, "nullable": True},
+        "salesman": {"type": "string",  "description": "Optional Salesman_Name to filter by",   "required": False, "nullable": True},
+    }
+    output_type = "object"
+
+    def forward(self, top_n: int = 5, salesman: str = None):
+        df_sub = df
+        if salesman is not None:
+            if "Salesman_Name" not in df.columns:
+                raise ValueError("Salesman_Name column not found in DataFrame.")
+            df_sub = df_sub[df_sub["Salesman_Name"] == salesman]
+            if df_sub.empty:
+                return pd.DataFrame(columns=["SKU_1","SKU_2","Brand_1","Brand_2","Total_Redistribution_Value"])
+
+        pair_values = defaultdict(float)
+        pair_brands = {}
+        for order_id, group in df_sub.groupby("Order_Id"):
+            items = group.drop_duplicates(subset=["SKU_Code"]).loc[:, ["SKU_Code","Brand","Redistribution Value"]]
+            sku_list = sorted(items["SKU_Code"].tolist())
+            brand_map = dict(zip(items["SKU_Code"], items["Brand"]))
+            val_map   = dict(zip(items["SKU_Code"], items["Redistribution Value"]))
+            for a, b in combinations(sku_list, 2):
+                total = val_map.get(a, 0) + val_map.get(b, 0)
+                pair_values[(a, b)] += total
+                pair_brands[(a, b)] = (brand_map[a], brand_map[b])
+
+        data = []
+        for (sku1, sku2), total_val in sorted(pair_values.items(), key=lambda x: x[1], reverse=True)[:top_n]:
+            b1, b2 = pair_brands[(sku1, sku2)]
+            data.append({
+                "SKU_1": sku1,
+                "SKU_2": sku2,
+                "Brand_1": b1,
+                "Brand_2": b2,
+                "Total_Redistribution_Value": total_val,
+            })
+        return pd.DataFrame(data)
+
 class HeuristicNextPurchasePredictionTool(Tool):
     name = "heuristic_next_purchase_prediction"
     description = (
@@ -1096,16 +1140,16 @@ class HeuristicNextPurchasePredictionTool(Tool):
             )
         return "\n".join(prediction_summary)
 
+
 class CustomerListTool(Tool):
     name = "customer_list"
     description = (
-        "List unique customers served by a given Salesman for a specific Brand in a given Month. "
-        "Returns a pandas.DataFrame with column 'Customer_Name'."
+        "List unique customers served by a given Salesman for a specific Brand in a given Month."
     )
     inputs = {
-        "salesman": {"type": "string", "description": "Salesman_Name to filter by", "required": True, "nullable": False},
-        "brand":    {"type": "string", "description": "Brand to filter by", "required": True, "nullable": False},
-        "month":    {"type": "string", "description": "Month in YYYY-MM format", "required": True, "nullable": False},
+        "salesman": {"type": "string", "description": "Salesman_Name to filter by", "required": True,  "nullable": False},
+        "brand":    {"type": "string", "description": "Brand to filter by",        "required": True,  "nullable": False},
+        "month":    {"type": "string", "description": "Month in YYYY-MM format",       "required": True,  "nullable": False},
     }
     output_type = "object"
 
@@ -1113,62 +1157,9 @@ class CustomerListTool(Tool):
         for col in ["Salesman_Name", "Brand", "Month"]:
             if col not in df.columns:
                 raise ValueError(f"{col} column not found in DataFrame.")
-        sub = df[
-            (df["Salesman_Name"] == salesman) &
-            (df["Brand"] == brand) &
-            (df["Month"] == month)
-        ]
+        sub = df[(df["Salesman_Name"] == salesman) & (df["Brand"] == brand) & (df["Month"] == month)]
         return sub[["Customer_Name"]].drop_duplicates().reset_index(drop=True)
 
-class CoPurchaseValueTool(Tool):
-    name = "copurchase_value"
-    description = (
-        "Compute top SKU and Brand co-purchase pairs by total Redistribution Value. "
-        "Optionally filter by Salesman_Name. Returns a pandas.DataFrame with columns: "
-        "SKU_1, SKU_2, Brand_1, Brand_2, Total_Redistribution_Value."
-    )
-    inputs = {
-        "top_n": {"type": "integer", "description": "Number of top pairs to return (default 5)", "required": False, "nullable": True},
-        "salesman": {"type": "string", "description": "Optional Salesman_Name to filter by", "required": False, "nullable": True},
-    }
-    output_type = "object"
-
-    def forward(self, top_n: int = 5, salesman: str = None):
-        df_sub = df
-        if salesman:
-            if "Salesman_Name" not in df.columns:
-                raise ValueError("Salesman_Name column not found in DataFrame.")
-            df_sub = df_sub[df_sub["Salesman_Name"] == salesman]
-            if df_sub.empty:
-                return pd.DataFrame(columns=["SKU_1","SKU_2","Brand_1","Brand_2","Total_Redistribution_Value"])
-
-        pair_values = defaultdict(float)
-        pair_brands = {}
-
-        for order_id, group in df_sub.groupby("Order_Id"):
-            items = group.drop_duplicates(subset=["SKU_Code"])[["SKU_Code","Brand","Redistribution Value"]]
-            sku_list = items["SKU_Code"].tolist()
-            brand_map = dict(zip(items["SKU_Code"], items["Brand"]))
-            val_map   = dict(zip(items["SKU_Code"], items["Redistribution Value"]))
-
-            for a, b in combinations(sorted(sku_list), 2):
-                pair_values[(a, b)] += val_map.get(a, 0) + val_map.get(b, 0)
-                # remember brands for each pair
-                pair_brands[(a, b)] = (brand_map[a], brand_map[b])
-
-        # build DataFrame from top N pairs
-        data = []
-        for (sku1, sku2), total in sorted(pair_values.items(), key=lambda x: x[1], reverse=True)[:top_n]:
-            b1, b2 = pair_brands[(sku1, sku2)]
-            data.append({
-                "SKU_1": sku1,
-                "SKU_2": sku2,
-                "Brand_1": b1,
-                "Brand_2": b2,
-                "Total_Redistribution_Value": total,
-            })
-
-        return pd.DataFrame(data)
 
 class SKURecommenderTool(Tool):
     name = "sku_recommender"
@@ -1270,7 +1261,6 @@ topn_tool = TopNTool()
 crosstab_tool = CrosstabTool()
 linreg_tool = LinRegEvalTool()
 predict_tool = PredictLinearTool()
-customer_list_tool = CustomerListTool()
 rf_tool = RFClassifyTool()
 copurchase_value_tool = CoPurchaseValueTool()
 customer_list_tool = CustomerListTool()
@@ -1315,7 +1305,6 @@ tools = [
     heuristic_next_purchase_prediction_tool,
     sku_recommender_tool,
     copurchase_value_tool,
-    customer_list_tool
 ]
 
 # Initialize LiteLLMModel with the provided API key
