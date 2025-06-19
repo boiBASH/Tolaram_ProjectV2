@@ -920,13 +920,29 @@ class CrossSellAnalysisTool(Tool):
         "Returns a string with bundle suggestions."
     )
     inputs = {
-        "type": {"type": "string", "description": "Use 'Brand' or 'SKU_Code'."},
-        "top_n": {"type": "integer", "description": "Number of top pairs to use (default 5).", "required": False},
-        "salesman": {"type": "string", "description": "Optional Salesman_Name to filter by.", "required": False, "nullable": True},
+        "type": {
+            "type": "string",
+            "description": "Use 'Brand' or 'SKU_Code'.",
+            "required": True,
+            "nullable": False,
+        },
+        "top_n": {
+            "type": "integer",
+            "description": "Number of top pairs to use (default 5).",
+            "required": False,
+            "nullable": True,
+        },
+        "salesman": {
+            "type": "string",
+            "description": "Optional Salesman_Name to filter by.",
+            "required": False,
+            "nullable": True,
+        },
     }
     output_type = "string"
 
     def forward(self, type: str, top_n: int = 5, salesman: str = None):
+        # ... (rest of your logic unchanged) ...
         # Validate type
         if type not in ["Brand", "SKU_Code"]:
             raise ValueError("Type must be 'Brand' or 'SKU_Code'.")
