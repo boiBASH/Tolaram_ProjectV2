@@ -435,6 +435,7 @@ class TopNTool(Tool):
             "type": "boolean",
             "description": "Sort order: True for ascending (bottom N), False for descending (top N). Default is False.",
             "required": False,
+            "nullable": True,
         },
     }
     output_type = "object"
