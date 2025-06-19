@@ -768,14 +768,14 @@ class PlotBarChartTool(Tool):
         "Plots a bar chart from a DataFrame. Requires a DataFrame to plot, a column for x-axis (values), and a column for y-axis (categories/labels). Returns 'PLOTTED'."
     )
     inputs = {
-        "data": {"type": "object", "description": "The DataFrame containing the data to plot.", "required": True},
-        "x_column": {"type": "string", "description": "The column for the x-axis (numeric values).", "required": True},
-        "y_column": {"type": "string", "description": "The column for the y-axis (categorical labels).", "required": True},
-        "title": {"type": "string", "description": "Title of the chart.", "required": True},
+        "data": {"type": "object", "description": "The DataFrame containing the data to plot."},
+        "x_column": {"type": "string", "description": "The column for the x-axis (numeric values)."},
+        "y_column": {"type": "string", "description": "The column for the y-axis (categorical labels)."},
+        "title": {"type": "string", "description": "Title of the chart."},
         "xlabel": {"type": "string", "description": "Label for the x-axis (optional).", "required": False, "nullable": True},
         "ylabel": {"type": "string", "description": "Label for the y-axis (optional).", "required": False, "nullable": True},
-        "horizontal": {"type": "boolean", "description": "Set to True for horizontal bars (default False).", "required": False},
-        "sort_by_x_desc": {"type": "boolean", "description": "Sort bars by x-axis value in descending order (default True).", "required": False},
+        "horizontal": {"type": "boolean", "description": "Set to True for horizontal bars (default False).", "required": False, "nullable": True},
+        "sort_by_x_desc": {"type": "boolean", "description": "Sort bars by x-axis value in descending order (default True).", "required": False, "nullable": True},
     }
     output_type = "string"
 
@@ -804,7 +804,6 @@ class PlotBarChartTool(Tool):
         plt.show()
         st.pyplot(plt.gcf())
         return "PLOTTED"
-
 class PlotLineChartTool(Tool):
     name = "plot_line_chart"
     description = (
