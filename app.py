@@ -1107,6 +1107,37 @@ class HeuristicNextPurchasePredictionTool(Tool):
             )
         return "\n".join(prediction_summary)
 
+
+class CustomerListTool(Tool):
+    name = "customer_list"
+    description = (
+        "List unique customers served by a given Salesman for a specific Brand in a given Month. "
+        "Returns a pandas.DataFrame with column 'Customer_Name'."
+    )
+    inputs = {
+        "salesman": {"type": "string", "description": "Salesman_Name to filter by", "required": True, "nullable": False},
+        "brand": {"type": "string", "description": "Brand to filter by", "required": True, "nullable": False},
+        "month": {"type": "string", "description": "Month in YYYY-MM format", "required": True, "nullable": False},
+    }
+    output_type = "object"
+
+    def forward(self, salesman: str, brand: str, month: str):
+        if "Salesman_Name" not in df.columns:
+            raise ValueError("Salesman_Name column not found in DataFrame.")
+        if "Brand" not in df.columns:
+            raise ValueError("Brand column not found in DataFrame.")
+        if "Month" not in df.columns:
+            raise ValueError("Month column not found in DataFrame.")
+
+        sub = df[
+            (df["Salesman_Name"] == salesman) &
+            (df["Brand"] == brand) &
+            (df["Month"] == month)
+        ]
+        unique_cust = sub[["Customer_Name"]].drop_duplicates().reset_index(drop=True)
+        return unique_cust
+
+
 class CoPurchaseValueTool(Tool):
     name = "copurchase_value"
     description = (
@@ -1257,6 +1288,7 @@ topn_tool = TopNTool()
 crosstab_tool = CrosstabTool()
 linreg_tool = LinRegEvalTool()
 predict_tool = PredictLinearTool()
+customer_list_tool = CustomerListTool()
 rf_tool = RFClassifyTool()
 copurchase_value_tool = CoPurchaseValueTool()
 final_answer_tool = FinalAnswerTool()
@@ -1299,6 +1331,7 @@ tools = [
     heuristic_next_purchase_prediction_tool,
     sku_recommender_tool,
     copurchase_value_tool,
+    customer_list_tool
 ]
 
 # Initialize LiteLLMModel with the provided API key
@@ -1367,10 +1400,11 @@ You have exactly these tools. When the user makes a request, pick the single too
 20. customer_profile_report(customer_phone)
 21. heuristic_next_purchase_prediction(customer_phone)
 22. sku_recommender(customer_phone, top_n=5)
+23. customer_list(salesman, brand, month)
 
-23. plot_bar_chart(data, x_column, y_column, title, xlabel=None, ylabel=None, horizontal=False, sort_by_x_desc=True)
-24. plot_line_chart(data, x_column, y_column, title, hue_column=None, xlabel=None, ylabel=None)
-25. plot_dual_axis_line_chart(data, x_column, y1_column, y2_column, title, xlabel=None, y1_label=None, y2_label=None)
+24. plot_bar_chart(data, x_column, y_column, title, xlabel=None, ylabel=None, horizontal=False, sort_by_x_desc=True)
+25. plot_line_chart(data, x_column, y_column, title, hue_column=None, xlabel=None, ylabel=None)
+26. plot_dual_axis_line_chart(data, x_column, y1_column, y2_column, title, xlabel=None, y1_label=None, y2_label=None)
 
 Tool-selection guidance:
 • If the user asks for a summary, overview, or actionable recommendations, call insights().
@@ -1381,6 +1415,7 @@ Tool-selection guidance:
 • For next-purchase questions, use heuristic_next_purchase_prediction(...) or sku_recommender(...).
 • For co-purchase patterns by volume/value or value-based cross-sell, call copurchase_value(top_n, salesman).
 • For bundle recommendations or cross-sell narrative, call cross_sell_analysis(type, top_n, salesman).
+• To list customers served by a specific salesman for a brand and month, call customer_list(salesman, brand, month).
 
 Always return exactly one tool call.
 """,
