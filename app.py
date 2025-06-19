@@ -504,6 +504,7 @@ class LinRegEvalTool(Tool):
             "type": "number",
             "description": "Fraction of data to use as test (optional; default 0.2)",
             "required": False,
+            "nullable": True,
         },
     }
     output_type = "object"
