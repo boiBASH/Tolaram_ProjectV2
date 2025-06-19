@@ -8,6 +8,7 @@ import datetime
 import io
 from itertools import combinations
 from collections import Counter
+from typing import Optional
 from collections import defaultdict
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import OneHotEncoder
