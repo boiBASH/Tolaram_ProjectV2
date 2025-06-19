@@ -207,6 +207,7 @@ class HistogramTool(Tool):
             "type": "integer",
             "description": "Number of bins for the histogram (optional)",
             "required": False,
+            "nullable": True,
         },
     }
     output_type = "string"
@@ -271,6 +272,7 @@ class CorrelationTool(Tool):
             "type": "string",
             "description": "Correlation method: 'pearson' or 'spearman' (optional)",
             "required": False,
+            "nullable": True,
         }
     }
     output_type = "object"
@@ -433,6 +435,7 @@ class TopNTool(Tool):
             "type": "boolean",
             "description": "Sort order: True for ascending (bottom N), False for descending (top N). Default is False.",
             "required": False,
+            "nullable": True,
         },
     }
     output_type = "object"
@@ -501,6 +504,7 @@ class LinRegEvalTool(Tool):
             "type": "number",
             "description": "Fraction of data to use as test (optional; default 0.2)",
             "required": False,
+            "nullable": True,
         },
     }
     output_type = "object"
@@ -573,11 +577,13 @@ class RFClassifyTool(Tool):
             "type": "number",
             "description": "Fraction of data to use as test (optional; default 0.2)",
             "required": False,
+            "nullable": True,
         },
         "n_estimators": {
             "type": "integer",
             "description": "Number of trees in the forest (optional; default 100)",
             "required": False,
+            "nullable": True,
         },
     }
     output_type = "object"
@@ -766,8 +772,8 @@ class PlotBarChartTool(Tool):
         "title": {"type": "string", "description": "Title of the chart.", "required": True},
         "xlabel": {"type": "string", "description": "Label for the x-axis (optional).", "required": False, "nullable": True},
         "ylabel": {"type": "string", "description": "Label for the y-axis (optional).", "required": False, "nullable": True},
-        "horizontal": {"type": "boolean", "description": "Set to True for horizontal bars (default False).", "required": False},
-        "sort_by_x_desc": {"type": "boolean", "description": "Sort bars by x-axis value in descending order (default True).", "required": False},
+        "horizontal": {"type": "boolean", "description": "Set to True for horizontal bars (default False).", "required": False, "nullable": True},
+        "sort_by_x_desc": {"type": "boolean", "description": "Sort bars by x-axis value in descending order (default True).", "required": False, "nullable": True},
     }
     output_type = "string"
 
@@ -926,7 +932,7 @@ class CrossSellAnalysisTool(Tool):
     )
     inputs = {
         "type":     {"type": "string",  "description": "'Brand' or 'SKU_Code'", "required": True},
-        "top_n":    {"type": "integer", "description": "Number of top pairs (default 5)",     "required": False},
+        "top_n":    {"type": "integer", "description": "Number of top pairs (default 5)",     "required": False, "nullable": True},
         "salesman": {"type": "string",  "description": "Optional Salesman_Name",              "required": False, "nullable": True},
     }
     output_type = "string"
@@ -1035,7 +1041,7 @@ class CoPurchaseValueTool(Tool):
         "Optionally filter by Salesman_Name."
     )
     inputs = {
-        "top_n":    {"type": "integer", "description": "Number of top pairs to return", "required": False},
+        "top_n":    {"type": "integer", "description": "Number of top pairs to return", "required": False, "nullable": True},
         "salesman": {"type": "string",  "description": "Optional Salesman_Name",        "required": False, "nullable": True},
     }
     output_type = "object"
@@ -1169,7 +1175,7 @@ class SKURecommenderTool(Tool):
     )
     inputs = {
         "customer_phone": {"type": "string", "description": "The phone number of the customer to recommend for.", "required": True},
-        "top_n": {"type": "integer", "description": "Number of top recommendations to return (default 5).", "required": False},
+        "top_n": {"type": "integer", "description": "Number of top recommendations to return (default 5).", "required": False, "nullable": True},
     }
     output_type = "string"
 
