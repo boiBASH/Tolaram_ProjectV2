@@ -226,7 +226,6 @@ class HistogramTool(Tool):
         plt.grid(axis="y", alpha=0.5)
         plt.tight_layout()
         plt.show()
-        st.pyplot(plt.gcf())
         return "PLOTTED"
 
 class ScatterPlotTool(Tool):
@@ -257,7 +256,6 @@ class ScatterPlotTool(Tool):
         plt.grid(alpha=0.3)
         plt.tight_layout()
         plt.show()
-        st.pyplot(plt.gcf())
         return "PLOTTED"
 
 class CorrelationTool(Tool):
@@ -791,7 +789,6 @@ class PlotBarChartTool(Tool):
         plt.ylabel(ylabel if ylabel else y_column, fontsize=13)
         plt.tight_layout()
         plt.show()
-        st.pyplot(plt.gcf())
         return "PLOTTED"
 
 class PlotLineChartTool(Tool):
@@ -835,7 +832,6 @@ class PlotLineChartTool(Tool):
         plt.grid(alpha=0.3)
         plt.tight_layout()
         plt.show()
-        st.pyplot(plt.gcf())
         return "PLOTTED"
 
 class PlotDualAxisLineChartTool(Tool):
@@ -911,51 +907,61 @@ class PlotDualAxisLineChartTool(Tool):
 
         plt.tight_layout()
         plt.show()
-        st.pyplot(plt.gcf())
         return "PLOTTED"
 
-class BrandSKUPairAnalysisTool(Tool):
-    name = "brand_sku_pair_analysis"
+class CrossSellAnalysisTool(Tool):
+    name = "cross_sell_analysis"
     description = (
-        "Analyzes and plots the most frequently co-purchased brand or SKU pairs. Specify 'type' as 'Brand' or 'SKU_Code'. Returns 'PLOTTED'."
+        "Generate actionable cross-selling recommendations from co-purchase data, "
+        "optionally filtered by Salesman_Name. Specify:\n"
+        "• type: 'Brand' or 'SKU_Code'\n"
+        "• top_n: number of top pairs to analyze (default 5)\n"
+        "• salesman: (optional) Salesman_Name to filter by\n"
+        "Returns a string with bundle suggestions."
     )
     inputs = {
-        "type": {"type": "string", "description": "Specify 'Brand' for brand pairs or 'SKU_Code' for SKU pairs."},
-        "top_n": {"type": "integer", "description": "Number of top pairs to display (default 10).", "required": False, "nullable": True},
+        "type": {"type": "string", "description": "Use 'Brand' or 'SKU_Code'."},
+        "top_n": {"type": "integer", "description": "Number of top pairs to use (default 5).", "required": False},
+        "salesman": {"type": "string", "description": "Optional Salesman_Name to filter by.", "required": False, "nullable": True},
     }
     output_type = "string"
 
-    def forward(self, type: str, top_n: int = 10):
+    def forward(self, type: str, top_n: int = 5, salesman: str = None):
+        # Validate type
         if type not in ["Brand", "SKU_Code"]:
             raise ValueError("Type must be 'Brand' or 'SKU_Code'.")
-        if type == "Brand" and "Brand" not in df.columns:
-            raise ValueError("Brand column not found in DataFrame.")
-        if type == "SKU_Code" and "SKU_Code" not in df.columns:
-            raise ValueError("SKU_Code column not found in DataFrame.")
+        # Filter by salesman if provided
+        df_sub = df
+        if salesman:
+            if "Salesman_Name" not in df.columns:
+                raise ValueError("Salesman_Name column not found in DataFrame.")
+            df_sub = df[df["Salesman_Name"] == salesman]
+            if df_sub.empty:
+                return f"No records found for Salesman_Name: {salesman}"
 
-        pair_df = calculate_brand_sku_pairs_internal(df, type_col=type)
-        pair_df = pair_df.head(top_n)
-
+        # Calculate pairs
+        pair_df = calculate_brand_sku_pairs_internal(df_sub, type_col=type).head(top_n)
         if pair_df.empty:
-            print(f"No {type} pairs found.")
-            return "PLOT_FAILED: No pairs found"
+            return "No co-purchase data available to generate recommendations."
 
-        plt.figure(figsize=(12, max(7, top_n * 0.7)))
-        sns.barplot(
-            data=pair_df,
-            x="Count",
-            y=f"{type}_Pair_Formatted",
-            palette="viridis",
-        )
-        plt.title(f"Top {top_n} Most Frequently Bought {type} Pairs", fontsize=16)
-        plt.xlabel("Number of Orders Together", fontsize=13)
-        plt.ylabel(f"{type} Pair", fontsize=13)
-        for i, v in enumerate(pair_df["Count"].values):
-            plt.text(v + 10, i, f"{v}", color="black", va="center", fontsize=11)
-        plt.tight_layout()
-        plt.show()
-        st.pyplot(plt.gcf())
-        return "PLOTTED"
+        # Build recommendations
+        recs = []
+        for _, row in pair_df.iterrows():
+            a = row[f"{type}_1"]
+            b = row[f"{type}_2"]
+            cnt = row["Count"]
+            context = f" for {salesman}" if salesman else ""
+            recs.append(
+                f"- Bundle {a} + {b}{context}: purchased together {cnt} times – consider a combo discount."
+            )
+
+        header = "Cross-Selling Recommendations"
+        if salesman:
+            header += f" (Salesman: {salesman})"
+        header += ":"
+
+        return header + "\n" + "\n".join(recs)
+
 
 class CustomerProfileReportTool(Tool):
     name = "customer_profile_report"
@@ -1205,7 +1211,7 @@ insights_tool = InsightsTool()
 plot_bar_chart_tool = PlotBarChartTool()
 plot_line_chart_tool = PlotLineChartTool()
 plot_dual_axis_line_chart_tool = PlotDualAxisLineChartTool()
-brand_sku_pair_analysis_tool = BrandSKUPairAnalysisTool()
+cross_sell_analysis_tool = CrossSellAnalysisTool()
 customer_profile_report_tool = CustomerProfileReportTool()
 heuristic_next_purchase_prediction_tool = HeuristicNextPurchasePredictionTool()
 sku_recommender_tool = SKURecommenderTool()
@@ -1233,7 +1239,7 @@ tools = [
     plot_bar_chart_tool,
     plot_line_chart_tool,
     plot_dual_axis_line_chart_tool,
-    brand_sku_pair_analysis_tool,
+    cross_sell_analysis_tool,
     customer_profile_report_tool,
     heuristic_next_purchase_prediction_tool,
     sku_recommender_tool,
@@ -1241,13 +1247,13 @@ tools = [
 
 # Initialize LiteLLMModel with the provided API key
 model = LiteLLMModel(
-    model_id="openrouter/openai/chatgpt-4o-latest",
-    temperature=0.4,
+    model_id="openrouter/openai/gpt-4o-2024-11-20",
+    temperature=0.3,
     api_key=api_key,
     additional_kwargs={
         "custom_llm_provider": "openrouter",
-        "max_tokens": 4096 ,
-        "max_completion_tokens": 2048,
+        "max_tokens": 1024,
+        "max_completion_tokens": 1024,
     },
 )
 
@@ -1255,49 +1261,64 @@ agent = CodeAgent(
     tools=tools,
     model=model,
     description="""
-You are a Grandmaster Data Science assistant. Two pandas DataFrames are loaded:
-- `df`: The main sales data, containing columns like 'Brand', 'SKU_Code', 'Customer_Name', 'Customer_Phone', 'Delivered_date', 'Redistribution Value', 'Delivered Qty', 'Order_Id', 'Month', 'Total_Amount_Spent'.
-- `PRED_DF`: Contains model-based purchase predictions, with columns like 'Customer_Phone', 'Next Brand Purchase', 'Next Purchase Date', 'Expected Spend', 'Expected Quantity', 'Probability', 'Suggestion'.
+You are a “Grandmaster Data Science” assistant whose sole focus is powering the user’s analysis of two pandas DataFrames:
 
-You have access to these tools:
-1) head(n) – Show first n rows of `df`.
-2) tail(n) – Show last n rows of `df`.
-3) info() – Return `df.info()` as string.
-4) describe(column) – Summary stats for a column or all of `df`.
-5) histogram(column, bins) – Plot histogram of a numeric column in `df`.
-6) scatter_plot(column_x, column_y) – Plot scatter of two numeric columns in `df`.
-7) correlation(method='pearson') – Compute correlation matrix of numeric columns in `df`.
-8) pivot_table(index, columns, values, aggfunc) – Create pivot table from `df`.
-9) filter_rows(column, operator, value) – Filter `df` rows. Returns the filtered DataFrame.
-10) groupby_agg(group_columns, metric_column, aggfunc) – Group `df` and aggregate. Returns the aggregated DataFrame.
-11) sort(column, ascending) – Sort `df` by column. Returns the sorted DataFrame.
-12) top_n(metric_column, n, group_columns=None, ascending=False) – Top/Bottom n by metric (optional grouping, specify `ascending=True` for bottom N) from `df`. Returns the result DataFrame.
-13) crosstab(row, column, aggfunc=None, values=None) – Crosstab between categories in `df`.
-14) linreg_eval(feature_columns, target_column, test_size=0.2) – Train/test + LinearRegression on `df`, return R².
-15) predict_linear(feature_columns, target_column, new_data) – Fit LinearRegression on `df`, predict new row.
-16) rf_classify(feature_columns, target_column, test_size=0.2, n_estimators=100) – RF classification on `df`, return report.
-17) final_answer(text) – Return a direct final answer to the user as a string.
-18) insights() – Compute overall sales-dataset insights and actionable recommendations. No arguments.
+• df: Main sales data with columns  
+  – Brand, SKU_Code, Customer_Name, Customer_Phone, Delivered_date,  
+    Redistribution Value, Delivered Qty, Order_Id, Month, Total_Amount_Spent
 
-**New Visualization Tools:**
-19) plot_bar_chart(data, x_column, y_column, title, xlabel=None, ylabel=None, horizontal=False, sort_by_x_desc=True) – Plots a bar chart from a DataFrame.
-20) plot_line_chart(data, x_column, y_column, title, hue_column=None, xlabel=None, ylabel=None) – Plots a line chart for time-series data.
-21) plot_dual_axis_line_chart(data, x_column, y1_column, y2_column, title, xlabel=None, y1_label=None, y2_label=None) – Plots two line charts on a dual y-axis.
+• PRED_DF: Model predictions with columns  
+  – Customer_Phone, Next Brand Purchase, Next Purchase Date,  
+    Expected Spend, Expected Quantity, Probability, Suggestion
 
-**New Analysis & Reporting Tools:**
-22) brand_sku_pair_analysis(type, top_n=10) – Analyzes and plots most frequently co-purchased 'Brand' or 'SKU_Code' pairs.
-23) customer_profile_report(customer_phone) – Generates a comprehensive purchase report for a specific customer from `df`.
-24) heuristic_next_purchase_prediction(customer_phone) – Predicts next likely purchase (SKU level) for a customer from `df` based on historical intervals.
-25) sku_recommender(customer_phone, top_n=5) – Generates personalized SKU recommendations for a customer using a hybrid model (from `df` and `PRED_DF`).
+You have exactly these tools; select one, call it with named arguments, and return ONLY the function call (no commentary):
 
-**Instructions for tool usage:**
-- When the user asks for “summary,” “data insights,” “actionable recommendations,” or a general overview of performance, prioritize calling `insights()`.
-- For specific data queries requiring visualization, use `groupby_agg` or `top_n` first to prepare the data, then use `plot_bar_chart`, `plot_line_chart`, or `plot_dual_axis_line_chart` to visualize the result.
-- For detailed customer information, use `customer_profile_report`.
-- For specific next-purchase predictions, use `heuristic_next_purchase_prediction` or refer to `PRED_DF` directly if model-based predictions are requested.
-- For product recommendations, use `sku_recommender`.
-- Always aim to provide actionable insights where possible.
-- Otherwise, pick exactly one tool that best fits and return one line of Python calling it (using named arguments). No explanations, no extra output—just the function call.
+ Exploratory & Statistics  
+ 1) head(n)  
+ 2) tail(n)  
+ 3) info()  
+ 4) describe(column=None)  
+ 5) histogram(column, bins)  
+ 6) scatter_plot(column_x, column_y)  
+ 7) correlation(method='pearson')
+
+ Data Aggregation & Filtering  
+ 8) pivot_table(index, columns, values, aggfunc)  
+ 9) filter_rows(column, operator, value)  
+10) groupby_agg(group_columns, metric_column, aggfunc)  
+11) sort(column, ascending)  
+12) top_n(metric_column, n, group_columns=None, ascending=False)  
+13) crosstab(row, column, aggfunc=None, values=None)
+
+ Modeling  
+14) linreg_eval(feature_columns, target_column, test_size=0.2)  
+15) predict_linear(feature_columns, target_column, new_data)  
+16) rf_classify(feature_columns, target_column, test_size=0.2, n_estimators=100)
+
+ High-Level Insights & Recommendations  
+17) insights()  
+18) brand_sku_pair_analysis(type, top_n=10)  
+19) customer_profile_report(customer_phone)  
+20) heuristic_next_purchase_prediction(customer_phone)  
+21) sku_recommender(customer_phone, top_n=5)
+
+ Visualization  
+22) plot_bar_chart(data, x_column, y_column, title, xlabel=None, ylabel=None, horizontal=False, sort_by_x_desc=True)  
+23) plot_line_chart(data, x_column, y_column, title, hue_column=None, xlabel=None, ylabel=None)  
+24) plot_dual_axis_line_chart(data, x_column, y1_column, y2_column, title, xlabel=None, y1_label=None, y2_label=None)
+
+───  
+Tool-selection guidance:  
+• “summary,” “overview,” or “actionable” → **insights()**  
+• Time series or trends → **groupby_agg** → **plot_line_chart**  
+• Category comparisons → **groupby_agg** → **plot_bar_chart**  
+• Correlations → **correlation()** or **scatter_plot()**  
+• Customer deep-dive → **customer_profile_report()**  
+• Next-purchase ask → **heuristic_next_purchase_prediction()** or direct **PRED_DF** lookup → **sku_recommender()**  
+• Co-purchase patterns → **brand_sku_pair_analysis()**
+
+Always return exactly one tool call. Do not explain, do not wrap in markdown—just the function invocation.  
+
 """,
     additional_authorized_imports=[
         "pandas",
@@ -1320,23 +1341,21 @@ if st.button("Get Response"):
     if user_prompt:
         with st.spinner("Thinking and analyzing..."):
             full_prompt = f"""
-You are a Grandmaster Data Science assistant helping a human analyze a pandas DataFrame named `df` and `PRED_DF`.
-You have access to the following tools:
+You are a Grandmaster Data Science assistant working with two pandas DataFrames—df (sales data) and PRED_DF (model predictions). You have access to these tools:
+
 {agent.description}
 
-Each tool has a defined purpose and must be called using named arguments only.
-🧠 Your task:
-Based on the user request, decide which tool best fits.
-Then return ONLY one valid Python line calling that tool:
-• ✅ Example → top_n(metric_column="revenue", n=10, group_columns="region")
-• ❌ No comments, no explanations, no extra output
-The DataFrames `df` and `PRED_DF` are already loaded and ready.
+Your job:
+1. Identify the single tool that best serves the user’s request.
+2. Return exactly one valid Python function call, using named arguments only.
+3. Do not include comments, explanations, markdown, or any extra text.
+
 User request: {user_prompt!r}
 Tool call:
 """
             try:
                 tool_call = agent.run(full_prompt).strip()
-                st.info(f"TOLARAM AI Agent: `{tool_call}`")
+                st.info(f"Agent chose to call: `{tool_call}`")
 
                 tool_dispatch = {tool.name: tool.forward for tool in tools}
                 result = eval(tool_call, globals(), tool_dispatch)
@@ -1352,8 +1371,7 @@ Tool call:
                     st.write(f"Result: {result}")
 
             except Exception as e:
-                st.error(f"Finished")
-                #st.error(f"❌ Error during tool execution: {str(e)}")
+                st.error(f"❌ Error during tool execution: {str(e)}")
     else:
         st.warning("Please enter a request.")
 
