@@ -1329,7 +1329,8 @@ tools = [
 
 # Initialize LiteLLMModel with the provided API key
 model = LiteLLMModel(
-    model_id="openrouter/openai/gpt-4o-2024-11-20",
+    #model_id="openrouter/openai/gpt-4o-2024-11-20",
+    model_id="openrouter/meta-llama/llama-4-maverick:free,
     temperature=0.3,
     api_key=api_key,
     additional_kwargs={
