@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from smolagents import CodeAgent, LiteLLMModel, Tool
 import datetime
-import iof
+import io
 from itertools import combinations
 from collections import Counter
 from collections import defaultdict
