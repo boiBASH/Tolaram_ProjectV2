@@ -146,7 +146,7 @@ def calculate_brand_sku_pairs_internal(data_frame, type_col="Brand"):
 class HeadTool(Tool):
     name = "head"
     description = "Return the first n rows of the DataFrame df."
-    inputs = {"n": {"type": "integer", "description": "Number of rows to display"}}
+    inputs = {"n": {"type": "integer", "description": "Number of rows to display", "required": True, "nullable": False}}
     output_type = "object"
 
     def forward(self, n: int):
@@ -155,7 +155,7 @@ class HeadTool(Tool):
 class TailTool(Tool):
     name = "tail"
     description = "Return the last n rows of the DataFrame df."
-    inputs = {"n": {"type": "integer", "description": "Number of rows to display"}}
+    inputs = {"n": {"type": "integer", "description": "Number of rows to display", "required": True, "nullable": False}}
     output_type = "object"
 
     def forward(self, n: int):
@@ -201,7 +201,7 @@ class HistogramTool(Tool):
         "Plot a histogram of a numeric column in df. Returns 'PLOTTED' after showing the plot."
     )
     inputs = {
-        "column": {"type": "string", "description": "Name of the numeric column to plot"},
+        "column": {"type": "string", "description": "Name of the numeric column to plot", "required": True, "nullable": False},
         "bins": {
             "type": "integer",
             "description": "Number of bins for the histogram (optional)",
@@ -236,8 +236,8 @@ class ScatterPlotTool(Tool):
         "Plot a scatter plot of two numeric columns. Returns 'PLOTTED' after showing the plot."
     )
     inputs = {
-        "column_x": {"type": "string", "description": "Name of the numeric column for the x-axis"},
-        "column_y": {"type": "string", "description": "Name of the numeric column for the y-axis"},
+        "column_x": {"type": "string", "description": "Name of the numeric column for the x-axis", "required": True, "nullable": False},
+        "column_y": {"type": "string", "description": "Name of the numeric column for the y-axis", "required": True, "nullable": False},
     }
     output_type = "string"
 
@@ -288,15 +288,19 @@ class PivotTableTool(Tool):
         "Create a pivot table. Specify index, columns, values, and aggregation function. Returns a pandas.DataFrame."
     )
     inputs = {
-        "index": {"type": "string", "description": "Column name to use as the pivot index"},
-        "columns": {"type": "string", "description": "Column name to use as the pivot columns"},
+        "index": {"type": "string", "description": "Column name to use as the pivot index", "required": True, "nullable": False},
+        "columns": {"type": "string", "description": "Column name to use as the pivot columns", "required": True, "nullable": False},
         "values": {
             "type": "string",
             "description": "Column name(s) to use as values (if multiple, separate by commas)",
+            "required": True,
+            "nullable": False,
         },
         "aggfunc": {
             "type": "string",
             "description": "Aggregation function: 'sum', 'mean', 'count', 'max', or 'min'",
+            "required": True,
+            "nullable": False,
         },
     }
     output_type = "object"
@@ -319,16 +323,20 @@ class FilterRowsTool(Tool):
         "Filter rows from df based on a comparison column, operator, value. Returns the filtered DataFrame."
     )
     inputs = {
-        "column": {"type": "string", "description": "Column name to apply filter on"},
+        "column": {"type": "string", "description": "Column name to apply filter on", "required": True, "nullable": False},
         "operator": {
             "type": "string",
             "description": "Comparison operator: one of '>', '<', '=', '>=', '<=', '=='",
+            "required": True,
+            "nullable": False,
         },
         "value": {
             "type": "string",
             "description": (
                 "Value to compare to (if numeric, will be parsed). If string column, wrap value in quotes."
             ),
+            "required": True,
+            "nullable": False,
         },
     }
     output_type = "object"
@@ -365,11 +373,13 @@ class GroupByAggregateTool(Tool):
         "Group the DataFrame by one or more columns, then aggregate a metric column using a specified function. Returns the aggregated DataFrame."
     )
     inputs = {
-        "group_columns": {"type": "string", "description": "Comma-separated column names to group by"},
-        "metric_column": {"type": "string", "description": "Name of the numeric column to aggregate"},
+        "group_columns": {"type": "string", "description": "Comma-separated column names to group by", "required": True, "nullable": False},
+        "metric_column": {"type": "string", "description": "Name of the numeric column to aggregate", "required": True, "nullable": False},
         "aggfunc": {
             "type": "string",
             "description": "Aggregation function: 'sum', 'mean', 'count', 'max', or 'min'",
+            "required": True,
+            "nullable": False,
         },
     }
     output_type = "object"
@@ -394,10 +404,12 @@ class SortTool(Tool):
         "Sort the DataFrame by a specified column. Specify ascending (True/False). Returns the sorted DataFrame."
     )
     inputs = {
-        "column": {"type": "string", "description": "Column name to sort by"},
+        "column": {"type": "string", "description": "Column name to sort by", "required": True, "nullable": False},
         "ascending": {
             "type": "boolean",
             "description": "Sort order: True for ascending, False for descending",
+            "required": True,
+            "nullable": False,
         },
     }
     output_type = "object"
@@ -416,8 +428,8 @@ class TopNTool(Tool):
         "Specify ascending (True/False) for sorting order (True for bottom N, False for top N)."
     )
     inputs = {
-        "metric_column": {"type": "string", "description": "Name of the numeric column to rank by"},
-        "n": {"type": "integer", "description": "Number of top/bottom rows/groups to return"},
+        "metric_column": {"type": "string", "description": "Name of the numeric column to rank by", "required": True, "nullable": False},
+        "n": {"type": "integer", "description": "Number of top/bottom rows/groups to return", "required": True, "nullable": False},
         "group_columns": {
             "type": "string",
             "description": "Comma-separated columns to group by (optional)",
@@ -452,8 +464,8 @@ class CrosstabTool(Tool):
         "Compute a cross-tabulation (frequency table) between two categorical columns. Returns a pandas.DataFrame."
     )
     inputs = {
-        "row": {"type": "string", "description": "Column name for rows"},
-        "column": {"type": "string", "description": "Column name for columns"},
+        "row": {"type": "string", "description": "Column name for rows", "required": True, "nullable": False},
+        "column": {"type": "string", "description": "Column name for columns", "required": True, "nullable": False},
         "aggfunc": {
             "type": "string",
             "description": "Aggregation function: 'count', 'sum', 'mean' (optional)",
@@ -491,8 +503,8 @@ class LinRegEvalTool(Tool):
         "test_size: fraction for test (optional, default 0.2). Returns a pandas.DataFrame with 'train' and 'test' R²."
     )
     inputs = {
-        "feature_columns": {"type": "string", "description": "Comma-separated column names to use as features"},
-        "target_column": {"type": "string", "description": "Name of the target column"},
+        "feature_columns": {"type": "string", "description": "Comma-separated column names to use as features", "required": True, "nullable": False},
+        "target_column": {"type": "string", "description": "Name of the target column", "required": True, "nullable": False},
         "test_size": {
             "type": "number",
             "description": "Fraction of data to use as test (optional; default 0.2)",
@@ -529,11 +541,13 @@ class PredictLinearTool(Tool):
         "feature_columns: comma-separated features; target_column: name of target; new_data: comma-separated numeric values. Returns the predicted numeric value."
     )
     inputs = {
-        "feature_columns": {"type": "string", "description": "Comma-separated column names to use as features"},
-        "target_column": {"type": "string", "description": "Name of the target column"},
+        "feature_columns": {"type": "string", "description": "Comma-separated column names to use as features", "required": True, "nullable": False},
+        "target_column": {"type": "string", "description": "Name of the target column", "required": True, "nullable": False},
         "new_data": {
             "type": "string",
             "description": "Comma-separated numeric values for the new sample, in same order as feature_columns",
+            "required": True,
+            "nullable": False,
         },
     }
     output_type = "number"
@@ -563,8 +577,8 @@ class RFClassifyTool(Tool):
         "feature_columns: comma-separated features; target_column: name of target class; test_size: fraction for test (optional, default 0.2); n_estimators: number of trees (optional, default 100). Returns a classification report dictionary."
     )
     inputs = {
-        "feature_columns": {"type": "string", "description": "Comma-separated column names to use as features"},
-        "target_column": {"type": "string", "description": "Name of the target class column"},
+        "feature_columns": {"type": "string", "description": "Comma-separated column names to use as features", "required": True, "nullable": False},
+        "target_column": {"type": "string", "description": "Name of the target class column", "required": True, "nullable": False},
         "test_size": {
             "type": "number",
             "description": "Fraction of data to use as test (optional; default 0.2)",
@@ -606,7 +620,7 @@ class RFClassifyTool(Tool):
 class FinalAnswerTool(Tool):
     name = "final_answer"
     description = "Use this to return a direct final answer to the user as a string."
-    inputs = {"text": {"type": "string", "description": "Final answer to return to the user."}}
+    inputs = {"text": {"type": "string", "description": "Final answer to return to the user.", "required": True, "nullable": False}}
     output_type = "string"
 
     def forward(self, text: str):
@@ -758,10 +772,10 @@ class PlotBarChartTool(Tool):
         "Plots a bar chart from a DataFrame. Requires a DataFrame to plot, a column for x-axis (values), and a column for y-axis (categories/labels). Returns 'PLOTTED'."
     )
     inputs = {
-        "data": {"type": "object", "description": "The DataFrame containing the data to plot."},
-        "x_column": {"type": "string", "description": "The column for the x-axis (numeric values)."},
-        "y_column": {"type": "string", "description": "The column for the y-axis (categorical labels)."},
-        "title": {"type": "string", "description": "Title of the chart."},
+        "data": {"type": "object", "description": "The DataFrame containing the data to plot.", "required": True, "nullable": False},
+        "x_column": {"type": "string", "description": "The column for the x-axis (numeric values).", "required": True, "nullable": False},
+        "y_column": {"type": "string", "description": "The column for the y-axis (categorical labels).", "required": True, "nullable": False},
+        "title": {"type": "string", "description": "Title of the chart.", "required": True, "nullable": False},
         "xlabel": {"type": "string", "description": "Label for the x-axis (optional).", "required": False, "nullable": True},
         "ylabel": {"type": "string", "description": "Label for the y-axis (optional).", "required": False, "nullable": True},
         "horizontal": {"type": "boolean", "description": "Set to True for horizontal bars (default False).", "required": False, "nullable": True},
@@ -801,11 +815,11 @@ class PlotLineChartTool(Tool):
         "Plots a line chart from a DataFrame, typically for time-series data. Requires a DataFrame, a column for x-axis (time), and a column for y-axis (value). Optional: hue column for multiple lines. Returns 'PLOTTED'."
     )
     inputs = {
-        "data": {"type": "object", "description": "The DataFrame containing the data to plot."},
-        "x_column": {"type": "string", "description": "The column for the x-axis (e.g., 'Month', 'Date')."},
-        "y_column": {"type": "string", "description": "The column for the y-axis (numeric value)."},
+        "data": {"type": "object", "description": "The DataFrame containing the data to plot.", "required": True, "nullable": False},
+        "x_column": {"type": "string", "description": "The column for the x-axis (e.g., 'Month', 'Date').", "required": True, "nullable": False},
+        "y_column": {"type": "string", "description": "The column for the y-axis (numeric value).", "required": True, "nullable": False},
         "hue_column": {"type": "string", "description": "Optional: Column to create multiple lines (e.g., 'Brand', 'Customer').", "required": False, "nullable": True},
-        "title": {"type": "string", "description": "Title of the chart."},
+        "title": {"type": "string", "description": "Title of the chart.", "required": True, "nullable": False},
         "xlabel": {"type": "string", "description": "Label for the x-axis (optional).", "required": False, "nullable": True},
         "ylabel": {"type": "string", "description": "Label for the y-axis (optional).", "required": False, "nullable": True},
     }
@@ -845,11 +859,11 @@ class PlotDualAxisLineChartTool(Tool):
         "Plots two line charts on a dual y-axis for comparison, typically for time-series data. Requires a DataFrame, a common x-axis (time), and two different y-axes (values). Returns 'PLOTTED'."
     )
     inputs = {
-        "data": {"type": "object", "description": "The DataFrame containing the data to plot."},
-        "x_column": {"type": "string", "description": "The common column for the x-axis (e.g., 'Month', 'Date')."},
-        "y1_column": {"type": "string", "description": "The column for the first y-axis (numeric value)."},
-        "y2_column": {"type": "string", "description": "The column for the second y-axis (numeric value)."},
-        "title": {"type": "string", "description": "Title of the chart."},
+        "data": {"type": "object", "description": "The DataFrame containing the data to plot.", "required": True, "nullable": False},
+        "x_column": {"type": "string", "description": "The common column for the x-axis (e.g., 'Month', 'Date').", "required": True, "nullable": False},
+        "y1_column": {"type": "string", "description": "The column for the first y-axis (numeric value).", "required": True, "nullable": False},
+        "y2_column": {"type": "string", "description": "The column for the second y-axis (numeric value).", "required": True, "nullable": False},
+        "title": {"type": "string", "description": "Title of the chart.", "required": True, "nullable": False},
         "xlabel": {"type": "string", "description": "Label for the x-axis (optional).", "required": False, "nullable": True},
         "y1_label": {"type": "string", "description": "Label for the first y-axis (optional).", "required": False, "nullable": True},
         "y2_label": {"type": "string", "description": "Label for the second y-axis (optional).", "required": False, "nullable": True},
@@ -944,7 +958,7 @@ class CrossSellAnalysisTool(Tool):
             return "No co-purchase data available to generate recommendations."
         recs = []
         for _, row in pairs.iterrows():
-            a, b, cnt = row[f"{type}_1"], row[f"{type}_2"], row["Count"]
+            a, b, cnt = row[f"{type}_Pair_Tuple"][0], row[f"{type}_Pair_Tuple"][1], row["Count"]
             context = f" for {salesman}" if salesman else ""
             recs.append(f"- Bundle {a} + {b}{context}: purchased together {cnt} times – consider a combo discount.")
         header = "Cross-Selling Recommendations"
@@ -960,7 +974,7 @@ class CustomerProfileReportTool(Tool):
         "Generates a comprehensive purchase report for a specific customer. Returns a detailed string summary."
     )
     inputs = {
-        "customer_phone": {"type": "string", "description": "The phone number of the customer to analyze."},
+        "customer_phone": {"type": "string", "description": "The phone number of the customer to analyze.", "required": True, "nullable": False},
     }
     output_type = "string"
 
@@ -1077,7 +1091,7 @@ class HeuristicNextPurchasePredictionTool(Tool):
         "Predicts the next likely purchase (SKU level) for a customer based on their historical purchasing intervals. Returns a string summary of predictions."
     )
     inputs = {
-        "customer_phone": {"type": "string", "description": "The phone number of the customer to predict for."},
+        "customer_phone": {"type": "string", "description": "The phone number of the customer to predict for.", "required": True, "nullable": False},
     }
     output_type = "string"
 
@@ -1160,14 +1174,13 @@ class CustomerListTool(Tool):
         return sub[["Customer_Name"]].drop_duplicates().reset_index(drop=True)
 
 
-
 class SKURecommenderTool(Tool):
     name = "sku_recommender"
     description = (
         "Generates personalized SKU recommendations for a customer based on a hybrid model. Returns a string summary of previously purchased and recommended SKUs."
     )
     inputs = {
-        "customer_phone": {"type": "string", "description": "The phone number of the customer to recommend for."},
+        "customer_phone": {"type": "string", "description": "The phone number of the customer to recommend for.", "required": True, "nullable": False},
         "top_n": {"type": "integer", "description": "Number of top recommendations to return (default 5).", "required": False, "nullable": True},
     }
     output_type = "string"
