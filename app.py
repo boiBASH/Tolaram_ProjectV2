@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from smolagents import CodeAgent, LiteLLMModel, Tool
 import datetime
-import io
+import iof
 from itertools import combinations
 from collections import Counter
 from collections import defaultdict
@@ -271,7 +271,7 @@ class CorrelationTool(Tool):
             "type": "string",
             "description": "Correlation method: 'pearson' or 'spearman' (optional)",
             "required": False,
-            "nullable": True,
+            #"nullable": True,
         }
     }
     output_type = "object"
