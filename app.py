@@ -923,60 +923,42 @@ class CrossSellAnalysisTool(Tool):
         "type": {
             "type": "string",
             "description": "Use 'Brand' or 'SKU_Code'.",
-            "required": True,
-            "nullable": False,
+            "required": True
         },
         "top_n": {
             "type": "integer",
             "description": "Number of top pairs to use (default 5).",
             "required": False,
-            "nullable": True,
+            "nullable": True
         },
         "salesman": {
             "type": "string",
             "description": "Optional Salesman_Name to filter by.",
             "required": False,
-            "nullable": True,
+            "nullable": True
         },
     }
     output_type = "string"
 
     def forward(self, type: str, top_n: int = 5, salesman: str = None):
-        # ... (rest of your logic unchanged) ...
-        # Validate type
+        # ... same logic as before ...
         if type not in ["Brand", "SKU_Code"]:
             raise ValueError("Type must be 'Brand' or 'SKU_Code'.")
-        # Filter by salesman if provided
-        df_sub = df
-        if salesman:
-            if "Salesman_Name" not in df.columns:
-                raise ValueError("Salesman_Name column not found in DataFrame.")
-            df_sub = df[df["Salesman_Name"] == salesman]
-            if df_sub.empty:
-                return f"No records found for Salesman_Name: {salesman}"
-
-        # Calculate pairs
+        df_sub = df[df["Salesman_Name"] == salesman] if salesman else df
+        if salesman and df_sub.empty:
+            return f"No records found for Salesman_Name: {salesman}"
         pair_df = calculate_brand_sku_pairs_internal(df_sub, type_col=type).head(top_n)
         if pair_df.empty:
             return "No co-purchase data available to generate recommendations."
-
-        # Build recommendations
         recs = []
         for _, row in pair_df.iterrows():
-            a = row[f"{type}_1"]
-            b = row[f"{type}_2"]
-            cnt = row["Count"]
+            a, b, cnt = row[f"{type}_1"], row[f"{type}_2"], row["Count"]
             context = f" for {salesman}" if salesman else ""
-            recs.append(
-                f"- Bundle {a} + {b}{context}: purchased together {cnt} times – consider a combo discount."
-            )
-
+            recs.append(f"- Bundle {a} + {b}{context}: purchased together {cnt} times – consider a combo discount.")
         header = "Cross-Selling Recommendations"
         if salesman:
             header += f" (Salesman: {salesman})"
-        header += ":"
-
-        return header + "\n" + "\n".join(recs)
+        return header + ":\n" + "\n".join(recs)
 
 
 class CustomerProfileReportTool(Tool):
