@@ -227,6 +227,7 @@ class HistogramTool(Tool):
         plt.grid(axis="y", alpha=0.5)
         plt.tight_layout()
         plt.show()
+        st.pyplot(plt.gcf())
         return "PLOTTED"
 
 class ScatterPlotTool(Tool):
@@ -257,6 +258,7 @@ class ScatterPlotTool(Tool):
         plt.grid(alpha=0.3)
         plt.tight_layout()
         plt.show()
+        st.pyplot(plt.gcf())
         return "PLOTTED"
 
 class CorrelationTool(Tool):
@@ -790,6 +792,7 @@ class PlotBarChartTool(Tool):
         plt.ylabel(ylabel if ylabel else y_column, fontsize=13)
         plt.tight_layout()
         plt.show()
+        st.pyplot(plt.gcf())
         return "PLOTTED"
 
 class PlotLineChartTool(Tool):
@@ -833,6 +836,7 @@ class PlotLineChartTool(Tool):
         plt.grid(alpha=0.3)
         plt.tight_layout()
         plt.show()
+        st.pyplot(plt.gcf())
         return "PLOTTED"
 
 class PlotDualAxisLineChartTool(Tool):
@@ -908,6 +912,7 @@ class PlotDualAxisLineChartTool(Tool):
 
         plt.tight_layout()
         plt.show()
+        st.pyplot(plt.gcf())
         return "PLOTTED"
 
 class CrossSellAnalysisTool(Tool):
