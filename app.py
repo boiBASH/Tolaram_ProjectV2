@@ -915,57 +915,46 @@ class PlotDualAxisLineChartTool(Tool):
         st.pyplot(plt.gcf())
         return "PLOTTED"
 
+
 class CrossSellAnalysisTool(Tool):
     name = "cross_sell_analysis"
     description = (
-        "Generate actionable cross-selling recommendations from co-purchase data, "
-        "optionally filtered by Salesman_Name. Specify:\n"
-        "• type: 'Brand' or 'SKU_Code'\n"
-        "• top_n: number of top pairs to analyze (default 5)\n"
-        "• salesman: (optional) Salesman_Name to filter by\n"
-        "Returns a string with bundle suggestions."
+        "Generate actionable cross-selling recommendations from co-purchase data, optionally filtered by Salesman_Name. "
+        "Specify type='Brand' or 'SKU_Code', top_n as number of pairs, and optional salesman. Returns a string with bundle suggestions."
     )
     inputs = {
-        "type": {
-            "type": "string",
-            "description": "Use 'Brand' or 'SKU_Code'.",
-            "required": True
-        },
-        "top_n": {
-            "type": "integer",
-            "description": "Number of top pairs to use (default 5).",
-            "required": False,
-            "nullable": True
-        },
-        "salesman": {
-            "type": "string",
-            "description": "Optional Salesman_Name to filter by.",
-            "required": False,
-            "nullable": True
-        },
+        "type":     {"type": "string", "description": "Specify 'Brand' or 'SKU_Code'", "required": True,  "nullable": False},
+        "top_n":    {"type": "integer","description": "Number of top pairs to analyze (default 5)", "required": False, "nullable": True},
+        "salesman": {"type": "string", "description": "Optional Salesman_Name to filter by",    "required": False, "nullable": True},
     }
     output_type = "string"
 
     def forward(self, type: str, top_n: int = 5, salesman: str = None):
-        # ... same logic as before ...
         if type not in ["Brand", "SKU_Code"]:
             raise ValueError("Type must be 'Brand' or 'SKU_Code'.")
-        df_sub = df[df["Salesman_Name"] == salesman] if salesman else df
-        if salesman and df_sub.empty:
-            return f"No records found for Salesman_Name: {salesman}"
-        pair_df = calculate_brand_sku_pairs_internal(df_sub, type_col=type).head(top_n)
-        if pair_df.empty:
+        df_sub = df
+        if salesman:
+            if "Salesman_Name" not in df.columns:
+                raise ValueError("Salesman_Name column not found in DataFrame.")
+            df_sub = df[df["Salesman_Name"] == salesman]
+            if df_sub.empty:
+                return f"No records found for Salesman_Name: {salesman}"
+
+        pairs = calculate_brand_sku_pairs_internal(df_sub, type_col=type).head(top_n)
+        if pairs.empty:
             return "No co-purchase data available to generate recommendations."
+
         recs = []
-        for _, row in pair_df.iterrows():
+        for _, row in pairs.iterrows():
             a, b, cnt = row[f"{type}_1"], row[f"{type}_2"], row["Count"]
             context = f" for {salesman}" if salesman else ""
             recs.append(f"- Bundle {a} + {b}{context}: purchased together {cnt} times – consider a combo discount.")
+
         header = "Cross-Selling Recommendations"
         if salesman:
             header += f" (Salesman: {salesman})"
-        return header + ":\n" + "\n".join(recs)
-
+        header += ":"
+        return header + "\n" + "\n".join(recs)
 
 class CustomerProfileReportTool(Tool):
     name = "customer_profile_report"
@@ -1107,7 +1096,6 @@ class HeuristicNextPurchasePredictionTool(Tool):
             )
         return "\n".join(prediction_summary)
 
-
 class CustomerListTool(Tool):
     name = "customer_list"
     description = (
@@ -1116,27 +1104,21 @@ class CustomerListTool(Tool):
     )
     inputs = {
         "salesman": {"type": "string", "description": "Salesman_Name to filter by", "required": True, "nullable": False},
-        "brand": {"type": "string", "description": "Brand to filter by", "required": True, "nullable": False},
-        "month": {"type": "string", "description": "Month in YYYY-MM format", "required": True, "nullable": False},
+        "brand":    {"type": "string", "description": "Brand to filter by", "required": True, "nullable": False},
+        "month":    {"type": "string", "description": "Month in YYYY-MM format", "required": True, "nullable": False},
     }
     output_type = "object"
 
     def forward(self, salesman: str, brand: str, month: str):
-        if "Salesman_Name" not in df.columns:
-            raise ValueError("Salesman_Name column not found in DataFrame.")
-        if "Brand" not in df.columns:
-            raise ValueError("Brand column not found in DataFrame.")
-        if "Month" not in df.columns:
-            raise ValueError("Month column not found in DataFrame.")
-
+        for col in ["Salesman_Name", "Brand", "Month"]:
+            if col not in df.columns:
+                raise ValueError(f"{col} column not found in DataFrame.")
         sub = df[
             (df["Salesman_Name"] == salesman) &
             (df["Brand"] == brand) &
             (df["Month"] == month)
         ]
-        unique_cust = sub[["Customer_Name"]].drop_duplicates().reset_index(drop=True)
-        return unique_cust
-
+        return sub[["Customer_Name"]].drop_duplicates().reset_index(drop=True)
 
 class CoPurchaseValueTool(Tool):
     name = "copurchase_value"
@@ -1291,6 +1273,7 @@ predict_tool = PredictLinearTool()
 customer_list_tool = CustomerListTool()
 rf_tool = RFClassifyTool()
 copurchase_value_tool = CoPurchaseValueTool()
+customer_list_tool = CustomerListTool()
 final_answer_tool = FinalAnswerTool()
 insights_tool = InsightsTool()
 
@@ -1327,6 +1310,7 @@ tools = [
     plot_line_chart_tool,
     plot_dual_axis_line_chart_tool,
     cross_sell_analysis_tool,
+    customer_list_tool
     customer_profile_report_tool,
     heuristic_next_purchase_prediction_tool,
     sku_recommender_tool,
@@ -1350,30 +1334,30 @@ agent = CodeAgent(
     tools=tools,
     model=model,
     description="""
-You are a Grandmaster Data Science assistant whose sole focus is powering the user’s analysis of two pandas DataFrames:
+You are a Grandmaster Data Science assistant working with two pandas DataFrames:
 
-df is the main sales data and contains these columns:
-• Brand
-• SKU_Code
-• Customer_Name
-• Customer_Phone
-• Delivered_date
-• Redistribution Value
-• Delivered Qty
-• Order_Id
-• Month
-• Total_Amount_Spent
+• df: main sales data with columns:
+  – Brand
+  – SKU_Code
+  – Customer_Name
+  – Customer_Phone
+  – Delivered_date
+  – Redistribution Value
+  – Delivered Qty
+  – Order_Id
+  – Month
+  – Total_Amount_Spent
 
-PRED_DF holds model predictions and contains these columns:
-• Customer_Phone
-• Next Brand Purchase
-• Next Purchase Date
-• Expected Spend
-• Expected Quantity
-• Probability
-• Suggestion
+• PRED_DF: model predictions with columns:
+  – Customer_Phone
+  – Next Brand Purchase
+  – Next Purchase Date
+  – Expected Spend
+  – Expected Quantity
+  – Probability
+  – Suggestion
 
-You have exactly these tools. When the user makes a request, pick the single tool that best serves it, call that tool with named arguments only, and return exactly that one line of Python with no comments, explanations, markdown, or extra text:
+You have exactly these tools. Upon each user request, you must choose the single tool that best addresses it, call that tool with named arguments only, and return exactly one line of Python, without comments, explanations, markdown, or any extra text:
 
 1. head(n)
 2. tail(n)
@@ -1407,15 +1391,15 @@ You have exactly these tools. When the user makes a request, pick the single too
 26. plot_dual_axis_line_chart(data, x_column, y1_column, y2_column, title, xlabel=None, y1_label=None, y2_label=None)
 
 Tool-selection guidance:
-• If the user asks for a summary, overview, or actionable recommendations, call insights().
-• For time-series or trend analysis, use groupby_agg(...) then plot_line_chart(...).
-• For category comparisons, use groupby_agg(...) then plot_bar_chart(...).
-• For correlation analysis, use correlation(...) or scatter_plot(...).
-• For a customer deep-dive, use customer_profile_report(...).
-• For next-purchase questions, use heuristic_next_purchase_prediction(...) or sku_recommender(...).
-• For co-purchase patterns by volume/value or value-based cross-sell, call copurchase_value(top_n, salesman).
-• For bundle recommendations or cross-sell narrative, call cross_sell_analysis(type, top_n, salesman).
-• To list customers served by a specific salesman for a brand and month, call customer_list(salesman, brand, month).
+• Summary, overview, or actionable recommendations → insights()
+• Time-series or trends → groupby_agg(...) then plot_line_chart(...)
+• Category comparisons → groupby_agg(...) then plot_bar_chart(...)
+• Correlations → correlation(...) or scatter_plot(...)
+• Customer deep-dive → customer_profile_report(...)
+• Next-purchase questions → heuristic_next_purchase_prediction(...) or sku_recommender(...)
+• Co-purchase patterns (volume or value) → copurchase_value(...)
+• Cross-sell narrative or bundle suggestions → cross_sell_analysis(...)
+• List customers by salesman/brand/month → customer_list(...)
 
 Always return exactly one tool call.
 """,
