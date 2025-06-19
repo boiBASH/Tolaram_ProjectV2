@@ -8,6 +8,7 @@ import datetime
 import io
 from itertools import combinations
 from collections import Counter
+from collections import defaultdict
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import train_test_split
@@ -1115,7 +1116,6 @@ class CoPurchaseValueTool(Tool):
     output_type = "object"
 
     def forward(self, top_n: int = 5, salesman: str = None):
-        # Filter by salesman if provided
         df_sub = df
         if salesman:
             if "Salesman_Name" not in df.columns:
@@ -1124,28 +1124,32 @@ class CoPurchaseValueTool(Tool):
             if df_sub.empty:
                 return pd.DataFrame(columns=["SKU_1","SKU_2","Brand_1","Brand_2","Total_Redistribution_Value"])
 
-        # Prepare order-level SKU lists and redistribution values
-        order_groups = df_sub.groupby("Order_Id")[['SKU_Code','Brand','Redistribution Value']]
-        # Accumulate pair values
         pair_values = defaultdict(float)
-        for order_id, group in order_groups:
-            items = group.drop_duplicates(subset=['SKU_Code'])
-            sku_list = items['SKU_Code'].tolist()
-            brand_map = dict(zip(items['SKU_Code'], items['Brand']))
-            value_map = dict(zip(items['SKU_Code'], items['Redistribution Value']))
-            for a, b in combinations(sku_list, 2):
-                pair_values[(a, b)] += value_map.get(a, 0) + value_map.get(b, 0)
+        pair_brands = {}
 
-        # Build DataFrame
+        for order_id, group in df_sub.groupby("Order_Id"):
+            items = group.drop_duplicates(subset=["SKU_Code"])[["SKU_Code","Brand","Redistribution Value"]]
+            sku_list = items["SKU_Code"].tolist()
+            brand_map = dict(zip(items["SKU_Code"], items["Brand"]))
+            val_map   = dict(zip(items["SKU_Code"], items["Redistribution Value"]))
+
+            for a, b in combinations(sorted(sku_list), 2):
+                pair_values[(a, b)] += val_map.get(a, 0) + val_map.get(b, 0)
+                # remember brands for each pair
+                pair_brands[(a, b)] = (brand_map[a], brand_map[b])
+
+        # build DataFrame from top N pairs
         data = []
-        for (sku1, sku2), total_val in sorted(pair_values.items(), key=lambda x: x[1], reverse=True)[:top_n]:
+        for (sku1, sku2), total in sorted(pair_values.items(), key=lambda x: x[1], reverse=True)[:top_n]:
+            b1, b2 = pair_brands[(sku1, sku2)]
             data.append({
-                'SKU_1': sku1,
-                'SKU_2': sku2,
-                'Brand_1': brand_map.get(sku1),
-                'Brand_2': brand_map.get(sku2),
-                'Total_Redistribution_Value': total_val
+                "SKU_1": sku1,
+                "SKU_2": sku2,
+                "Brand_1": b1,
+                "Brand_2": b2,
+                "Total_Redistribution_Value": total,
             })
+
         return pd.DataFrame(data)
 
 class SKURecommenderTool(Tool):
