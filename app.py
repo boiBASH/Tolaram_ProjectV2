@@ -1101,6 +1101,53 @@ class HeuristicNextPurchasePredictionTool(Tool):
             )
         return "\n".join(prediction_summary)
 
+class CoPurchaseValueTool(Tool):
+    name = "copurchase_value"
+    description = (
+        "Compute top SKU and Brand co-purchase pairs by total Redistribution Value. "
+        "Optionally filter by Salesman_Name. Returns a pandas.DataFrame with columns: "
+        "SKU_1, SKU_2, Brand_1, Brand_2, Total_Redistribution_Value."
+    )
+    inputs = {
+        "top_n": {"type": "integer", "description": "Number of top pairs to return (default 5)", "required": False, "nullable": True},
+        "salesman": {"type": "string", "description": "Optional Salesman_Name to filter by", "required": False, "nullable": True},
+    }
+    output_type = "object"
+
+    def forward(self, top_n: int = 5, salesman: str = None):
+        # Filter by salesman if provided
+        df_sub = df
+        if salesman:
+            if "Salesman_Name" not in df.columns:
+                raise ValueError("Salesman_Name column not found in DataFrame.")
+            df_sub = df_sub[df_sub["Salesman_Name"] == salesman]
+            if df_sub.empty:
+                return pd.DataFrame(columns=["SKU_1","SKU_2","Brand_1","Brand_2","Total_Redistribution_Value"])
+
+        # Prepare order-level SKU lists and redistribution values
+        order_groups = df_sub.groupby("Order_Id")[['SKU_Code','Brand','Redistribution Value']]
+        # Accumulate pair values
+        pair_values = defaultdict(float)
+        for order_id, group in order_groups:
+            items = group.drop_duplicates(subset=['SKU_Code'])
+            sku_list = items['SKU_Code'].tolist()
+            brand_map = dict(zip(items['SKU_Code'], items['Brand']))
+            value_map = dict(zip(items['SKU_Code'], items['Redistribution Value']))
+            for a, b in combinations(sku_list, 2):
+                pair_values[(a, b)] += value_map.get(a, 0) + value_map.get(b, 0)
+
+        # Build DataFrame
+        data = []
+        for (sku1, sku2), total_val in sorted(pair_values.items(), key=lambda x: x[1], reverse=True)[:top_n]:
+            data.append({
+                'SKU_1': sku1,
+                'SKU_2': sku2,
+                'Brand_1': brand_map.get(sku1),
+                'Brand_2': brand_map.get(sku2),
+                'Total_Redistribution_Value': total_val
+            })
+        return pd.DataFrame(data)
+
 class SKURecommenderTool(Tool):
     name = "sku_recommender"
     description = (
@@ -1202,6 +1249,7 @@ crosstab_tool = CrosstabTool()
 linreg_tool = LinRegEvalTool()
 predict_tool = PredictLinearTool()
 rf_tool = RFClassifyTool()
+copurchase_value_tool = CoPurchaseValueTool()
 final_answer_tool = FinalAnswerTool()
 insights_tool = InsightsTool()
 
@@ -1241,6 +1289,7 @@ tools = [
     customer_profile_report_tool,
     heuristic_next_purchase_prediction_tool,
     sku_recommender_tool,
+    copurchase_value_tool,
 ]
 
 # Initialize LiteLLMModel with the provided API key
@@ -1282,7 +1331,7 @@ PRED_DF holds model predictions and contains these columns:
 • Probability
 • Suggestion
 
-You have exactly these tools. When the user makes a request, pick the single tool that best serves it, call that tool with named arguments only, and return exactly that one line of Python—no comments, no explanations, no markdown, no extra text:
+You have exactly these tools. When the user makes a request, pick the single tool that best serves it, call that tool with named arguments only, and return exactly that one line of Python with no comments, explanations, markdown, or extra text:
 
 1. head(n)
 2. tail(n)
@@ -1305,13 +1354,14 @@ You have exactly these tools. When the user makes a request, pick the single too
 
 17. insights()
 18. cross_sell_analysis(type, top_n=5, salesman=None)
-19. customer_profile_report(customer_phone)
-20. heuristic_next_purchase_prediction(customer_phone)
-21. sku_recommender(customer_phone, top_n=5)
+19. copurchase_value(top_n=5, salesman=None)
+20. customer_profile_report(customer_phone)
+21. heuristic_next_purchase_prediction(customer_phone)
+22. sku_recommender(customer_phone, top_n=5)
 
-22. plot_bar_chart(data, x_column, y_column, title, xlabel=None, ylabel=None, horizontal=False, sort_by_x_desc=True)
-23. plot_line_chart(data, x_column, y_column, title, hue_column=None, xlabel=None, ylabel=None)
-24. plot_dual_axis_line_chart(data, x_column, y1_column, y2_column, title, xlabel=None, y1_label=None, y2_label=None)
+23. plot_bar_chart(data, x_column, y_column, title, xlabel=None, ylabel=None, horizontal=False, sort_by_x_desc=True)
+24. plot_line_chart(data, x_column, y_column, title, hue_column=None, xlabel=None, ylabel=None)
+25. plot_dual_axis_line_chart(data, x_column, y1_column, y2_column, title, xlabel=None, y1_label=None, y2_label=None)
 
 Tool-selection guidance:
 • If the user asks for a summary, overview, or actionable recommendations, call insights().
@@ -1320,7 +1370,8 @@ Tool-selection guidance:
 • For correlation analysis, use correlation(...) or scatter_plot(...).
 • For a customer deep-dive, use customer_profile_report(...).
 • For next-purchase questions, use heuristic_next_purchase_prediction(...) or sku_recommender(...).
-• For co-purchase patterns or cross-sell opportunities (overall or by salesperson), call cross_sell_analysis(type, top_n, salesman).
+• For co-purchase patterns by volume/value or value-based cross-sell, call copurchase_value(top_n, salesman).
+• For bundle recommendations or cross-sell narrative, call cross_sell_analysis(type, top_n, salesman).
 
 Always return exactly one tool call.
 """,
