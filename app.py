@@ -928,7 +928,7 @@ class CrossSellAnalysisTool(Tool):
     )
     inputs = {
         "type":     {"type": "string",  "description": "'Brand' or 'SKU_Code'", "required": True},
-        "top_n":    {"type": "integer", "description": "Number of top pairs (default 5)",     "required": False},
+        "top_n":    {"type": "integer", "description": "Number of top pairs (default 5)",     "required": False, "nullable": True},
         "salesman": {"type": "string",  "description": "Optional Salesman_Name",              "required": False, "nullable": True},
     }
     output_type = "string"
@@ -1151,7 +1151,9 @@ class CustomerListTool(Tool):
     )
     inputs = {
         "salesman": {"type": "string", "description": "Salesman_Name to filter by", "required": True},
-        "brand":    {"type": "string", "description": "Brand to filter by",   "required": True},
+
+        "brand":    {"type": "string", "description": "Brand to filter by",        "required": True},
+   
         "month":    {"type": "string", "description": "Month in YYYY-MM format",   "required": True},
     }
     output_type = "object"
@@ -1176,8 +1178,9 @@ class SKURecommenderTool(Tool):
         "Returns a string report describing the top recommended SKUs with a similarity score."
     )
     inputs = {
-        "customer_phone": {"type": "string", "description": "The phone number of the customer to recommend SKUs for.", "required": True},
-        "top_n": {"type": "integer", "description": "Number of top SKUs to recommend", "required": False},
+        "customer_phone": {"type": "string", "description": "The phone number of the customer to recommend for.", "required": True},
+        "top_n": {"type": "integer", "description": "Number of top recommendations to return (default 5).", "required": False, "nullable": True},
+
     }
     output_type = "string"
 
