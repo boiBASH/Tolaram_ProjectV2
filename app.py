@@ -1300,7 +1300,7 @@ tools = [
     plot_line_chart_tool,
     plot_dual_axis_line_chart_tool,
     cross_sell_analysis_tool,
-    customer_list_tool
+    customer_list_tool,
     customer_profile_report_tool,
     heuristic_next_purchase_prediction_tool,
     sku_recommender_tool,
