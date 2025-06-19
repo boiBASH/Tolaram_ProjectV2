@@ -170,7 +170,7 @@ class DescribeTool(Tool):
         "column": {
             "type": "string",
             "description": "Name of column to describe ('all' for full df)",
-            "nullable": True,
+            #"nullable": True,
             "required": False,
         }
     }
@@ -206,7 +206,7 @@ class HistogramTool(Tool):
             "type": "integer",
             "description": "Number of bins for the histogram (optional)",
             "required": False,
-            "nullable": True,
+            #"nullable": True,
         },
     }
     output_type = "string"
