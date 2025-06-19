@@ -207,6 +207,7 @@ class HistogramTool(Tool):
             "type": "integer",
             "description": "Number of bins for the histogram (optional)",
             "required": False,
+            "nullable": True,
         },
     }
     output_type = "string"
