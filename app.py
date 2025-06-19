@@ -272,6 +272,7 @@ class CorrelationTool(Tool):
             "type": "string",
             "description": "Correlation method: 'pearson' or 'spearman' (optional)",
             "required": False,
+            "nullable": True,
         }
     }
     output_type = "object"
