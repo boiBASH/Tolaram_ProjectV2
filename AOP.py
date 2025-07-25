@@ -73,7 +73,7 @@ val_growth = st.sidebar.slider(
 ) / 100.0
 
 # Load and clean the data
-file_path = "/content/drive/MyDrive/data_sample_analysis_cleaned.csv"
+file_path = "data_sample_analysis_cleaned.csv"
 df = load_clean_sales_data(file_path)
 
 # Compute baseline totals & dynamic targets
